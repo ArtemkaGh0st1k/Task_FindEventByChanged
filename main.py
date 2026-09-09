@@ -2,40 +2,67 @@ import asyncio
 import json
 from os.path import join
 from os import getcwd
+from pathlib import Path
+import subprocess
 import nodriver as uc
 
 from constants.path import Constant
 from models.deepseek import DeepSeekModel
+from helpers.converter import FileConverter
+
+# Путь к исполняемому файлу Edge
+EDGE_PATH = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+PROFILE_DIR = Path("./edge_profile").resolve()  # Абсолютный путь к папке профиля Edge для сохранения сессии
+CDP_PORT = 9222
+
 
 async def main():
 
-    first_run = not Constant.PROFILE_DIR
+    first_run = not PROFILE_DIR.exists()  # Проверяем, существует ли папка профиля
+    browser = None  # Инициализация переменной browser
 
-    # Запуск браузера с профилем
-    browser = await uc.start\
-    (
-        headless=False,  # Оставляем False, чтобы пройти авторизацию и не вызывать подозрения у Cloudflare
-        user_data_dir=str(Constant.PROFILE_DIR)
-    )
+    edge_cmd = \
+        [
+            EDGE_PATH,
+            f"--remote-debugging-port={CDP_PORT}",
+            f"--user-data-dir={PROFILE_DIR}",
+            "--no-first-run",
+            "--no-default-browser-check"
+        ]
 
-    page = await browser.get(Constant.DEEPSEEK_URL)
+    print("Запуск процесса Microsoft Edge...")
+    edge_process = subprocess.Popen(edge_cmd)
 
-    if first_run:
-        print("\n" + "="*60)
-        print("ПЕРВЫЙ ЗАПУСК:")
-        print("1. Авторизуйтесь на сайте DeepSeek.")
-        print("2. Пройдите капчу Cloudflare, если появится.")
-        print("3. После появления интерфейса чата нажмите Enter в этой консоли...")
-        print("="*60 + "\n")
-        await asyncio.get_event_loop().run_in_executor(None, input)
-        print("Сессия успешно сохранена!")
-    else:
-        print("Профиль загружен. Ожидание готовности интерфейса...")
-        await page.sleep(4)
+    await asyncio.sleep(10)  # Ждем, пока Edge запустится и откроется порт для удаленной отладки
 
-    deep_seek_model = DeepSeekModel()
-    FILE_TO_UPLOAD = join(getcwd(), "resources", "prompt_files", "dataset1.xlsx")
     try:
+        # 2. Подключаемся nodriver к запущенному порту Edge
+        print(f"Подключение nodriver к 127.0.0.1:{CDP_PORT}...")
+        
+        config = uc.Config(host="127.0.0.1", port=CDP_PORT, 
+                           browser_executable_path=EDGE_PATH)
+        browser = await uc.Browser.create(config=config)
+        # Переходим на сайт
+        page = await browser.get(Constant.DEEPSEEK_URL)
+
+        if first_run:
+            print("\n" + "="*60)
+            print("ПЕРВЫЙ ЗАПУСК:")
+            print("1. Авторизуйтесь на сайте DeepSeek.")
+            print("2. Пройдите капчу Cloudflare, если появится.")
+            print("3. После появления интерфейса чата нажмите Enter в этой консоли...")
+            print("="*60 + "\n")
+            await asyncio.get_event_loop().run_in_executor(None, input)
+            print("Сессия успешно сохранена!")
+        else:
+            print("Профиль загружен. Ожидание готовности интерфейса...")
+            await page.sleep(4)
+
+        deep_seek_model = DeepSeekModel()
+
+        FILE_PATH = r"C:\Users\Артем\Desktop\Job\Task_FindEventByChanged\resources\promt_files\dataset1.xlsx"
+        FILE_TO_UPLOAD = FileConverter.convert_xlsx_to_csv(FILE_PATH)  # Конвертируем XLSX в CSV
+
         # Выполняем отправку и получаем распарсенный результат
         result_data = await deep_seek_model.send_promt_and_get_json(
             page=page,  
@@ -56,7 +83,8 @@ async def main():
         
     finally:
         print("\nЗавершение работы браузера...")
-        browser.stop()
+        if browser:
+            browser.stop()
 
 if __name__ == "__main__":
     uc.loop().run_until_complete(main())
