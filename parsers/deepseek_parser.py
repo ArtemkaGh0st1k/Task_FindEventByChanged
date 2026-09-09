@@ -4,7 +4,8 @@ import json
 
 class DeepSeekParser:
 
-    def extract_json_from_text(self, raw_text: str) -> dict:
+    @staticmethod
+    def extract_json_from_text(raw_text: str) -> dict:
         """
         Извлекает и валидирует JSON из ответа модели, даже если он обернут 
         в Markdown-блоки (```json ... ```) или содержит текст до/после.

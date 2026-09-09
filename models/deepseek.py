@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+import json
 
 from parsers.deepseek_parser import DeepSeekParser
 
@@ -10,7 +11,7 @@ class DeepSeekModel:
         self.prompt = self.__set_default_prompt() if prompt is None else prompt
 
     def __set_default_prompt(self):
-        self.prompt = \
+        return \
             "Ты специалист по добыче нейти." \
             "Задача слудующая - есть данные по добыче нефти, жидкости для определенной скважины." \
             "Необходимо по этим данным понять было ли произведено на скважине какое-либо мероприятие," \
@@ -19,7 +20,21 @@ class DeepSeekModel:
             "На выходе необходим ответ в формате JSON, а именно:" \
             "Ответ: { 'мероприятие' : 'да/нет', 'дата' : 'дд.мм.гггг'}"
 
-    async def wait_for_stream(self, page, timeout: int = 120) -> str:
+    async def _wait_for_element(self, page, selectors: list, timeout: int = 10):
+        """Ожидает появления хотя бы одного из указанных элементов на странице."""
+        start_time = asyncio.get_event_loop().time()
+        while asyncio.get_event_loop().time() - start_time < timeout:
+            for selector in selectors:
+                try:
+                    element = await page.select(selector)
+                    if element:
+                        return element
+                except Exception:
+                    pass
+            await asyncio.sleep(0.5)
+        return None
+
+    async def wait_for_deepseek_stream(self, page, timeout: int = 120) -> str:
         """
         Динамически ожидает завершения генерации текста моделью DeepSeek,
         отслеживая остановку изменения DOM-элемента ответа.
@@ -56,38 +71,106 @@ class DeepSeekModel:
             await asyncio.sleep(0.5)
 
 
-    async def send_promt_and_get_json(self, page, prompt_text : str = None, file_path : str = None) -> str: 
+    async def send_promt_and_get_json(self, page, prompt_text: str = None, file_path: str = None) -> dict:
         """
-        Прикрепляет файл (если указан), вводит промпт и возвращает распарсенный JSON.
+        Загружает файл (если передан), вводит промпт, отправляет запрос 
+        и возвращает распарсенный результат в виде Python-словаря (dict).
         """
 
         if prompt_text is None:
             prompt_text = self.prompt
-
-        # 1. Загрузка файла через hidden input (если файл передан)
+        
+        # -------------------------------------------------------------
+        # ШАГ 1: Загрузка файла через истинный элемент <input type="file">
+        # -------------------------------------------------------------
         if file_path:
             abs_file_path = str(Path(file_path).resolve())
             print(f"Прикрепляем файл: {abs_file_path}")
-            
-            file_input = await page.select('input[type="file"]')
-            await file_input.send_keys(abs_file_path)
-            
-            # Задержка на обработку/превью файла интерфейсом
-            await page.sleep(2)
 
-        # 2. Поиск поля ввода текста
-        input_box = await page.select('#chat-input')
-        await input_box.send_keys(prompt_text)
-        await page.sleep(0.5)
+            file_input = None
+            for _ in range(10):
+                try:
+                    file_inputs = await page.select_all('input[type="file"]')
+                    if file_inputs:
+                        file_input = file_inputs[0]
+                        break
+                except Exception:
+                    pass
+                await asyncio.sleep(0.5)
 
-        # 3. Отправка запроса (нажатие Enter)
-        await input_box.send_keys('\n')
-        print("Запрос отправлен.")
+            if file_input:
+                await file_input.send_keys(abs_file_path)
+                print("Файл успешно передан в файловый инпут.")
+                # Пауза для обработки файла интерфейсом и отрисовки бейджа
+                await page.sleep(3)
+            else:
+                print("[Предупреждение] Не удалось найти <input type='file'> на странице.")
 
-        # 4. Ожидание завершения ответа
-        raw_response = await self.wait_forд_stream(page)
+        # -------------------------------------------------------------
+        # ШАГ 2: Ввод промпта и активация React/Vue событий
+        # -------------------------------------------------------------
+        print("Поиск текстового поля ввода...")
+        input_box = await self._wait_for_element(page, ['#chat-input', 'textarea'], timeout=10)
 
-        # 5. Извлечение JSON
-        
-        parsed_json = self.parser.extract_json_from_text(raw_response)
-        return parsed_json
+        if not input_box:
+            raise RuntimeError("Не удалось найти текстовое поле (#chat-input / textarea).")
+
+        if prompt_text:
+            # Вставляем текст и генерируем события input/change через JS, 
+            # чтобы веб-клиент разблокировал кнопку отправки
+            escaped_prompt = json.dumps(prompt_text)
+            await page.evaluate(f'''
+                const el = document.querySelector('#chat-input') || document.querySelector('textarea');
+                if (el) {{
+                    el.value = {escaped_prompt};
+                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                }}
+            ''')
+            await page.sleep(1)
+
+        # -------------------------------------------------------------
+        # ШАГ 3: Точная отправка запроса (Без задевания меню слева)
+        # -------------------------------------------------------------
+        print("Отправка запроса...")
+
+        # Поиск и клик по кнопке «Отправить» строго внутри контейнера поля ввода
+        sent_via_js = await page.evaluate('''
+            () => {
+                const chatInput = document.querySelector('#chat-input') || document.querySelector('textarea');
+                if (!chatInput) return false;
+
+                // Поднимаемся до общего родительского контейнера зоны ввода
+                const inputContainer = chatInput.closest('div[class*="input"]') || chatInput.parentElement.parentElement;
+                if (!inputContainer) return false;
+
+                // Находим все кнопки или элементы с роли button ВНУТРИ зоны ввода
+                const buttons = Array.from(inputContainer.querySelectorAll('div[role="button"], button'));
+                
+                // Ищем кнопку отправки (содержит SVG и не является кнопкой прикрепления)
+                const sendBtn = buttons.reverse().find(btn => {
+                    const hasSvg = btn.querySelector('svg');
+                    const isAttach = btn.getAttribute('aria-label')?.toLowerCase().includes('attach') || 
+                                     btn.getAttribute('aria-label')?.toLowerCase().includes('file');
+                    return hasSvg && !isAttach && btn.offsetWidth > 0;
+                });
+
+                if (sendBtn) {
+                    sendBtn.click();
+                    return true;
+                }
+                return false;
+            }
+        ''')
+
+        if not sent_via_js:
+            print("Кнопка не найдена через JS, отправка через эмуляцию Enter...")
+            await input_box.send_keys('\n')
+
+        print("Запрос отправлен. Ожидание ответа...")
+
+        # -------------------------------------------------------------
+        # ШАГ 4: Ожидание завершения ответа и парсинг JSON
+        # -------------------------------------------------------------
+        raw_response = await self.wait_for_deepseek_stream(page)
+        return DeepSeekParser.extract_json_from_text(raw_response)
