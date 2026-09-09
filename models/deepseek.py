@@ -2,23 +2,17 @@ import asyncio
 from pathlib import Path
 import json
 
+from models.base_model import BaseModel
 from parsers.deepseek_parser import DeepSeekParser
 
 
-class DeepSeekModel:
-    def __init__(self, prompt : str = None):
-        self.parser = DeepSeekParser()
-        self.prompt = self.__set_default_prompt() if prompt is None else prompt
-
-    def __set_default_prompt(self):
-        return \
-            "Ты специалист по добыче нейти." \
-            "Задача слудующая - есть данные по добыче нефти, жидкости для определенной скважины." \
-            "Необходимо по этим данным понять было ли произведено на скважине какое-либо мероприятие," \
-            "связанное с дополнительной добычей нефти." \
-            "Мы рассматриваем такие мероприятия как изменение частоты оборотов насоса, замена насоса." \
-            "На выходе необходим ответ в формате JSON, а именно:" \
-            "Ответ: { 'мероприятие' : 'да/нет', 'дата' : 'дд.мм.гггг'}"
+class DeepSeekModel(BaseModel):
+    def __init__(self, 
+                 model_name : str = None,
+                 base_prompt : str = None):
+        super().__init__(model_name=model_name,
+                        base_prompt=base_prompt,
+                        parser=DeepSeekParser())
 
     async def _wait_for_element(self, page, selectors: list, timeout: int = 10):
         """Ожидает появления хотя бы одного из указанных элементов на странице."""
@@ -78,7 +72,7 @@ class DeepSeekModel:
         """
 
         if prompt_text is None:
-            prompt_text = self.prompt
+            prompt_text = self.base_prompt
         
         # -------------------------------------------------------------
         # ШАГ 1: Загрузка файла через истинный элемент <input type="file">
@@ -173,4 +167,4 @@ class DeepSeekModel:
         # ШАГ 4: Ожидание завершения ответа и парсинг JSON
         # -------------------------------------------------------------
         raw_response = await self.wait_for_deepseek_stream(page)
-        return DeepSeekParser.extract_json_from_text(raw_response)
+        return self.parser.extract_json_from_text(raw_response)

@@ -1,11 +1,12 @@
 import re
 import json
 
+from parsers.base_parser import BaseParser
 
-class DeepSeekParser:
 
-    @staticmethod
-    def extract_json_from_text(raw_text: str) -> dict:
+class DeepSeekParser(BaseParser):
+
+    def extract_json_from_text(self, raw_text: str) -> dict:
         """
         Извлекает и валидирует JSON из ответа модели, даже если он обернут 
         в Markdown-блоки (```json ... ```) или содержит текст до/после.
