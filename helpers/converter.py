@@ -1,4 +1,5 @@
 import pandas as pd
+from os.path import exists
 
 class FileConverter:
 
@@ -9,3 +10,12 @@ class FileConverter:
         df = pd.read_excel(xlsx_path)
         df.to_csv(csv_path, index=False, encoding='utf-8')
         return csv_path
+
+    @staticmethod
+    def to_dataframe(file_path : str) -> pd.DataFrame:
+
+        if not exists(file_path):
+            return None
+        
+        df = pd.read_excel(file_path)
+        return df
