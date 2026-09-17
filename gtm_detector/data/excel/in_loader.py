@@ -16,7 +16,22 @@ class InnerWellDataLoader(BaseDataLoader):
         self.req_sheets = req_sheets
 
 
-    def load_wells_by_sheets(self, config : WellConfig):
+    def load_wells_by_sheets(self, config : WellConfig) -> dict[str, list[BaseObjectDto]]:
+        """
+        Делает выгрузку данных со всех доступных ему скважен. \n
+        Входные параметры:\n
+        `config`: Конфигурация пользователя для каждого листа файла. \n
+
+        Примечание: \n
+        `sheet_summator` --> вспомогательный счётчик для листа 'Прим', тк 
+        pandas считывает его по уебански.\n
+
+        Вообще структура файла очень плохая. Из-за пустых строк в начале и после заголовка.
+        Есть склеинные столбцы - тоже плохо влияет. \n
+        Совет: привести листы в единное соответсвие для быстроты и простоты обработки данных \n
+
+        Выходные данные: Словарь данных, где ключ - имя листа, значение - массив dto.
+        """
 
         data = {}
 
@@ -26,7 +41,7 @@ class InnerWellDataLoader(BaseDataLoader):
                 if sheet in file.sheet_names:
                     
                     df : pd.DataFrame = pd.read_excel(file, sheet_name=sheet)
-                    print(df.head)
+                    #print(df.head)
                     col_well_id_idx = column_index_from_string(config.col_well_idx[sheet]) - 1
 
                     if config.col_cluster_well_id[sheet]:
@@ -92,7 +107,6 @@ class InnerWellDataLoader(BaseDataLoader):
 
                             case "Прим":
                                 comments_row = df.iloc[row_idx + 1]
-                                end_idx = df.index[-1]
                                 if row_idx == df.index[-1]:
                                     comments = None
                                 else:
