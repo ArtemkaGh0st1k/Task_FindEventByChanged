@@ -33,7 +33,7 @@ class GTMVerdict:
 
     well_id: str
     has_gtm: bool
-    gtm_type: Optional[str] = None
     start_date: datetime
     end_date: datetime
+    gtm_type: Optional[str] = None
     reasoning: str = ""     

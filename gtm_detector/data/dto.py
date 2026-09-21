@@ -2,7 +2,7 @@ import pandas as pd
 from abc import ABC
 
 
-class BaseObjectDto(ABC):
+class BaseObjectDto():
     def __init__(self,
                  well_id : str | int,
                  well_cluster_id : str | int,
@@ -11,7 +11,6 @@ class BaseObjectDto(ABC):
         self.well_id = well_id
         self.well_cluster_id = well_cluster_id
         self.data = data
-        super().__init__()
 
 
 class OilDto(BaseObjectDto):
