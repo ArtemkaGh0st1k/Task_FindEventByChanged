@@ -1,4 +1,4 @@
-
+from typing import Optional
 
 from gtm_detector.data.dto import *
 
@@ -47,4 +47,32 @@ class NoteParser():
         note.data = convert_data
 
         return note
+
+
+    def extract_gtm_events(
+      self, note: Optional[StateDto], gtm_keywords: list[str]
+  ) -> list[pd.Timestamp]:
+        """Извлекает даты проведения сторонних ГТМ из комментариев в StateDto."""
+        if not note or not note.comments:
+            return []
+
+        gtm_dates = []
+        keywords_lower = [k.lower() for k in gtm_keywords]
+
+        # Обработка ситуаций, когда comments передан словарем или списком
+        if isinstance(note.comments, dict):
+            items = note.comments.items()
+        elif isinstance(note.comments, (list, tuple)):
+            items = zip(note.data.keys(), note.comments)
+        else:
+            return []
+
+        for date, comment in items:
+            if comment is None or pd.isna(comment):
+                continue
+            comment_str = str(comment).lower()
+            if any(kw in comment_str for kw in keywords_lower):
+                gtm_dates.append(pd.Timestamp(date))
+
+        return sorted(gtm_dates)
         
