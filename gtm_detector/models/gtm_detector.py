@@ -43,7 +43,7 @@ class GTMDetector:
       config: PipelineConfig,
       note_parser: NoteParser,
       model_path: Optional[str | Path] = None,
-      confidence_threshold: float = 0.60,
+      confidence_threshold: float = 0.4,
   ):
     self.config = config
     self.note_parser = note_parser
@@ -292,3 +292,12 @@ class GTMDetector:
     t_next_gtm = min(future_gtms) if future_gtms else pd.Timestamp.max
 
     return min(t_natural, t_next_gtm), q_base
+
+
+  def save_weights(self, output_path: str | Path):
+        """Сохраняет текущие веса нейросети на диск."""
+        out_path = Path(output_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        torch.save(self.model.state_dict(), out_path)
+        print(f"✅ Веса сохранены в {out_path.resolve()}")

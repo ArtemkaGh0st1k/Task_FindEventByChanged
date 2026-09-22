@@ -1,3 +1,4 @@
+import os
 from os.path import join
 from os import getcwd
 
@@ -44,14 +45,17 @@ if __name__ == "__main__":
     detector = GTMDetector(
         config=pipeline_config,
         note_parser=note_parser,
-        model_path=Constant.MODEL_PATH
+        model_path=Constant.WEIGHT_PATH
     )
+    #detector.save_weights(Constant.WEIGHT_PATH)
 
     # Обход всех скважин из исходной выгрузки
 
+    oil_dtos = wells.get("Qн", [])
+    unique_well_ids = list(dict.fromkeys([dto.well_id for dto in oil_dtos]))
+
     results_list = []
-    for oil_dto in wells.get("Qн", []):
-        well_id = oil_dto.well_id
+    for well_id in unique_well_ids:
 
         # Сборка финального DataFrame для визуализации или отладки
         df_well = detector.build_well_df(well_id, wells, transformed_features)
@@ -88,4 +92,4 @@ if __name__ == "__main__":
 
     # 4. Сохранение результатов в Excel
     df_results = pd.DataFrame(results_list)
-    df_results.to_csv(TimeHelper.get_path_h_m_s())
+    df_results.to_csv(TimeHelper.get_path_h_m_s(), index=False)
