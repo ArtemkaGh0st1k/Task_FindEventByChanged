@@ -1,6 +1,9 @@
 import pandas as pd
 from abc import ABC
+from datetime import datetime
 
+
+#################################### Для вх.данных ####################################
 
 class BaseObjectDto():
     def __init__(self,
@@ -52,3 +55,24 @@ class StateDto(BaseObjectDto):
 
         super().__init__(well_id, None, state_data)
         self.comments = comments
+
+#################################### Для вх.данных ####################################
+
+
+class ResultDto():
+    """Класс для хранения результата вых.данных"""
+    
+    def __init__(self,
+        well_id : str,
+        well_cluster_id : str,
+        gtm_type : str,
+        reason_stop : str,
+        start_date : datetime,
+        end_date : datetime):
+            
+            self.well_id = well_id
+            self.well_cluster_id = well_cluster_id
+            self.gtm_type = gtm_type
+            self.reason_stop = reason_stop
+            self.start_date = start_date
+            self.end_date = end_date

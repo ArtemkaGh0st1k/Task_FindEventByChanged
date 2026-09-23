@@ -16,3 +16,10 @@ class BaseDataLoader(ABC):
     @abstractmethod
     def load_wells_by_sheets(self, config):
         pass
+
+
+    def check_unnamed_columns(self, df : pd.DataFrame):
+        unnamed_cols : list[str] = [col for col in df.columns if 'Unnamed' in str(col)]
+        unnamed_cols_idx = [int(col.replace('Unnamed: ', '')) for col in unnamed_cols]
+    
+        return unnamed_cols_idx

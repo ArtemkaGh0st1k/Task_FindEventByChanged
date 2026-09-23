@@ -4,7 +4,8 @@ from os import getcwd
 
 from constants.path import Constant
 from gtm_detector.data.excel.in_loader import InnerWellDataLoader
-from gtm_detector.data.excel.config import WellConfig
+from gtm_detector.data.excel.out_loader import OutterDataLoader
+from gtm_detector.data.excel.config import *
 from gtm_detector.config.config import *
 from gtm_detector.features.feature_engineering import FeatureEngineer
 from gtm_detector.pipeline import GTMPipeline
@@ -18,6 +19,24 @@ if __name__ == "__main__":
     input_path = join(getcwd(), "resources", "input_dataset.xlsx")
     output_path = join(getcwd(), "resources", "output_dataset.xlsm")
 
+    outterExcelImportConfigs = \
+    [
+        OutterExcelImportConfig\
+            (
+                sheet_name="Результат__16_54_11",
+                start_row_idx=5,
+                well_id_idx="E",
+                well_cluster_id_idx="D",
+                type_gtm_idx="AA",
+                success_idx="AN",
+                reason_stop_idx = "AO",
+                start_date_idx="AP",
+                end_date_idx="AQ"
+            )
+    ]
+
+    outLoader = OutterDataLoader(output_path)
+    out_data_wells = outLoader.load_succes_and_contain_dates(outterExcelImportConfigs)
 
     #1. Настройка конфигурации сбора данных с Excel
     well_config = WellConfig\
