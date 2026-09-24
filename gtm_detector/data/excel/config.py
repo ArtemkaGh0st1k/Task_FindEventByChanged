@@ -14,7 +14,36 @@ class WellConfig:
 
 
 
-class OutterExcelImportConfig():
+class BaseExcelImportConfig():
+
+    def __init__(self,
+                sheet_name : str,
+                start_row_idx : int,
+                well_id_idx : str,
+                well_cluster_id_idx : str):
+
+        self.sheet_name = sheet_name
+        self.start_row_idx = start_row_idx
+        self.well_id_idx = well_id_idx
+        self.well_cluster_id_idx = well_cluster_id_idx
+
+
+class InnerExcelImportConfig(BaseExcelImportConfig):
+
+    def __init__(self,
+                 sheet_name : str,
+                 start_row_idx : int,
+                 well_id_idx : str,
+                 well_cluster_id_idx : str,
+                 start_date_idx : str):
+         
+        super().__init__(sheet_name, start_row_idx, well_id_idx, well_cluster_id_idx)
+
+        self.start_date_row_idx = start_date_idx
+        
+
+
+class OutterExcelImportConfig(BaseExcelImportConfig):
 
     def __init__(self, 
                  sheet_name : str,
@@ -40,11 +69,9 @@ class OutterExcelImportConfig():
         `start_date_idx`: Индекс столбца нач.даты \n
         `end_date_idx`: Индекс столбца конеч.даты
         """
-        
-        self.sheet_name = sheet_name
-        self.start_row_idx = start_row_idx
-        self.well_id_idx = well_id_idx
-        self.well_cluster_id_idx = well_cluster_id_idx
+
+        super().__init__(sheet_name, start_row_idx, well_id_idx, well_cluster_id_idx)
+
         self.type_gtm_idx = type_gtm_idx
         self.success_idx = success_idx
         self.reason_stop_idx = reason_stop_idx

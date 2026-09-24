@@ -1,6 +1,7 @@
 import os
 from os.path import join
 from os import getcwd
+from functools import reduce
 
 from constants.path import Constant
 from gtm_detector.data.excel.in_loader import InnerWellDataLoader
@@ -11,6 +12,7 @@ from gtm_detector.features.feature_engineering import FeatureEngineer
 from gtm_detector.pipeline import GTMPipeline
 from gtm_detector.parsers.note_parser import NoteParser
 from gtm_detector.models.gtm_detector import *
+from gtm_detector.plot.visualize import Visualizer
 from helpers.time import TimeHelper
 
 
@@ -19,6 +21,7 @@ if __name__ == "__main__":
     input_path = join(getcwd(), "resources", "input_dataset.xlsx")
     output_path = join(getcwd(), "resources", "output_dataset.xlsm")
 
+    # выгрузка выход.данных
     outterExcelImportConfigs = \
     [
         OutterExcelImportConfig\
@@ -34,24 +37,76 @@ if __name__ == "__main__":
                 end_date_idx="AQ"
             )
     ]
-
+    
     outLoader = OutterDataLoader(output_path)
     out_data_wells = outLoader.load_succes_and_contain_dates(outterExcelImportConfigs)
 
-    #1. Настройка конфигурации сбора данных с Excel
-    well_config = WellConfig\
-    (
-        has_unnamed={'Qн' : False, 'Fэцн ТМ' : False, 'Прим' : True},
-        start_date={'Qн' : [2, "T"], 'Fэцн ТМ' : [2, "T"], "Прим" : [2, "H"]},
-        col_well_idx={'Qн' : "E", "Fэцн ТМ" : "E", "Прим" : "D"},
-        start_data={"Qн" : [4, "T"], "Fэцн ТМ" : [4, "T"], "Прим" : [3, "H"]},
-        col_cluster_well_id={"Qн" : "I", "Fэцн ТМ" : "I", "Прим" : None},
-        count_empty_rows_before_header={"Qн" : 1, "Fэцн ТМ" : 1, "Прим" : 0}
-    )
+    # выгрузка вх.данных
+    innerExcelImportConfigs = \
+    [
+        InnerExcelImportConfig\
+            (
+                sheet_name="Qж",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Обв",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Qн",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Pлин",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Fэцн ТМ",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T",
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Рзаб",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Прим",
+                start_row_idx=3,
+                well_id_idx="D",
+                well_cluster_id_idx=None,
+                start_date_idx="H"
+            )
+    ]
 
-    #2. Выгрузка данных в DTO
     inLoader = InnerWellDataLoader(input_path)
-    wells = inLoader.load_wells_by_sheets(well_config)  #FIXME: Считывает похоже не все строки (2 строки последнее не прочитывает)
+    in_data_wells = inLoader.load_wells_by_sheets1(innerExcelImportConfigs)  #FIXME: Считывает похоже не все строки (2 строки последнее не прочитывает)
+
+    visualizer = Visualizer()
+    visualizer.visualize(in_data_wells, out_data_wells)
 
     #3. Расчёт признаков
     pipeline_config = PipelineConfig()

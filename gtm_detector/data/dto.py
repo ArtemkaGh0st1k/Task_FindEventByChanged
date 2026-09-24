@@ -56,6 +56,26 @@ class StateDto(BaseObjectDto):
         super().__init__(well_id, None, state_data)
         self.comments = comments
 
+
+class InnerResultDto():
+
+    def __init__(self,
+                 well_id : str,
+                 well_cluster_id : str,
+                 data : list):
+
+        self.well_id = well_id
+        self.well_cluster_id = well_cluster_id
+        self.data = data
+
+
+    def __eq__(self, other):
+        return isinstance(other, InnerResultDto) and self.well_id == other.well_id
+
+    
+    def __hash__(self):
+        return hash(self.well_id)
+
 #################################### Для вх.данных ####################################
 
 

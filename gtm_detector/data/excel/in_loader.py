@@ -3,7 +3,7 @@ import pandas as pd
 from openpyxl.utils import column_index_from_string
 
 from gtm_detector.data.excel.base_loader import BaseDataLoader
-from gtm_detector.data.excel.config import WellConfig
+from gtm_detector.data.excel.config import *
 from gtm_detector.data.dto import *
 
 class InnerWellDataLoader(BaseDataLoader):
@@ -123,5 +123,59 @@ class InnerWellDataLoader(BaseDataLoader):
 
                     data[sheet] = well_data_by_sheet
 
-        return data       
+        return data   
+
+
+
+    def load_wells_by_sheets1(self, configs : list[InnerExcelImportConfig]
+            ) -> dict[str, list]:
+        """Возращает словарь вх.данных для каждого листа в 
+        формате, ключ - имя листа, выход - массив объектов InnerResultDto.
+        Также одно значение ключа - общее время для всех объектов."""
+
+        data = {}
+        common_dates = [] 
+
+        with pd.ExcelFile(self.file_path) as file:
+            for config in configs:
+                if config.sheet_name in file.sheet_names:    
+
+                    df : pd.DataFrame = pd.read_excel(file, sheet_name=config.sheet_name)
+
+                    unnamed_idx = set(super().check_unnamed_columns(df))
+
+                    col_well_id_idx = column_index_from_string(config.well_id_idx) - 1
+                    if config.well_cluster_id_idx:
+                        col_well_cluster_idx = column_index_from_string(config.well_cluster_id_idx) - 1
+                    col_data_idx = column_index_from_string(config.start_date_row_idx) - 1
                     
+                    if col_well_id_idx in unnamed_idx: col_well_id_idx = f"Unnamed: {col_well_id_idx}"
+                    if (col_well_cluster_idx and col_well_cluster_idx in unnamed_idx): col_well_cluster_idx = f"Unnamed: {col_well_cluster_idx}"
+                    if col_data_idx in unnamed_idx: col_data_idx = f"Unnamed: {col_data_idx}"
+
+                    start_row = config.start_row_idx - 2
+                    last_row = df.iloc[:, 0].last_valid_index() + 1
+
+                    if len(common_dates) == 0:
+                        header_row = df.iloc[0]
+                        common_dates = header_row.loc[col_data_idx :].tolist()
+
+                    in_results : list[InnerResultDto] = []
+                    for row in range(start_row, last_row):
+                        well_row = df.iloc[row]
+
+                        well_id = well_row.loc[col_well_id_idx]
+                        well_cluster_id = well_row.loc[col_well_cluster_idx] if config.well_cluster_id_idx else None
+                        values = well_row.loc[col_data_idx :].tolist()
+
+                        in_res = InnerResultDto(well_id, well_cluster_id, values)
+                        in_results.append(in_res)
+
+                    data[config.sheet_name] = in_results
+
+        data["date"] = common_dates
+
+        return data
+            
+
+
