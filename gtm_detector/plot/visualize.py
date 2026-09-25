@@ -15,7 +15,7 @@ class Visualizer:
     def visualize(self,
                   in_wells: dict[str, list[InnerResultDto]],
                   out_wells: dict[str, list[ResultDto]],
-                  save_path : str = None):
+                  save_path : str):
 
         out_key ="Результат__16_54_11"
         out_result = {dto.well_id : 
@@ -69,7 +69,21 @@ class Visualizer:
                     fig.autofmt_xdate()
 
                     if save_path:
-                        fig.savefig(f"{save_path}/well_id_{well_id}.png")
+
+                        f_gtm_reason_stop_path : str = ""
+
+                        if reason.__contains__("ГТМ"): f_gtm_reason_stop_path = "ГТМ"
+                        elif reason.__contains__("обв"): f_gtm_reason_stop_path = "Обв"
+                        elif reason.__contains__("жидк"): f_gtm_reason_stop_path = "Жидк"
+                        elif reason.__contains__("ИДН"): f_gtm_reason_stop_path = "ИДН"
+                        elif reason.__contains__("МУН"): f_gtm_reason_stop_path = "МУН"
+                        elif reason.__contains__("остан"): f_gtm_reason_stop_path = "Останов"
+                        elif reason.__contains__("Отказ ЭЦН"): f_gtm_reason_stop_path = "Отказ ЭЦН"
+                        elif reason.__contains__("Смена ЭЦН"): f_gtm_reason_stop_path = "Смена ЭЦН"
+                        elif reason.__contains__("ТРС"): f_gtm_reason_stop_path = "ТРС"
+                        else: print(f"{reason}, {well_id}")
+
+                        fig.savefig(f"{save_path}/{f_gtm_reason_stop_path}/well_id_{well_id}.png")
                 
             except Exception:
                 continue
