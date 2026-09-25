@@ -14,7 +14,8 @@ class Visualizer:
 
     def visualize(self,
                   in_wells: dict[str, list[InnerResultDto]],
-                  out_wells: dict[str, list[ResultDto]]):
+                  out_wells: dict[str, list[ResultDto]],
+                  save_path : str = None):
 
         out_key ="Результат__16_54_11"
         out_result = {dto.well_id : 
@@ -66,7 +67,9 @@ class Visualizer:
                     ax.set_title(f"well_id={well_id} | {gtm_type} | {reason}")
                     ax.set_xlabel("Дата")
                     fig.autofmt_xdate()
-                    fig.savefig(f"results/analysis/well_id_{well_id}.png")
+
+                    if save_path:
+                        fig.savefig(f"{save_path}/well_id_{well_id}.png")
                 
             except Exception:
                 continue

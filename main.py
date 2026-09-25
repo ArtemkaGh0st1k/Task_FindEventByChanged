@@ -41,6 +41,12 @@ if __name__ == "__main__":
     outLoader = OutterDataLoader(output_path)
     out_data_wells = outLoader.load_succes_and_contain_dates(outterExcelImportConfigs)
 
+    out_data_only_f_gtm_wells = []
+    for well in out_data_wells.get("Результат__16_54_11"):
+        if well.gtm_type.__contains__("Увеличение F"):
+            out_data_only_f_gtm_wells.append(well)
+        
+
     # выгрузка вх.данных
     innerExcelImportConfigs = \
     [
@@ -103,10 +109,10 @@ if __name__ == "__main__":
     ]
 
     inLoader = InnerWellDataLoader(input_path)
-    in_data_wells = inLoader.load_wells_by_sheets1(innerExcelImportConfigs)  #FIXME: Считывает похоже не все строки (2 строки последнее не прочитывает)
+    in_data_wells = inLoader.load_wells_by_sheets1(innerExcelImportConfigs) 
 
     visualizer = Visualizer()
-    visualizer.visualize(in_data_wells, out_data_wells)
+    visualizer.visualize(in_data_wells, {"Результат__16_54_11" : out_data_only_f_gtm_wells}, save_path="results/success_and_has_dates/increase_f_gtm")
 
     #3. Расчёт признаков
     pipeline_config = PipelineConfig()
