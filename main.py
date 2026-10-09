@@ -1,37 +1,175 @@
-import json
+import os
+from os.path import join
+from os import getcwd
+from functools import reduce
 
-from models.ollama import OllamaModel
 from constants.path import Constant
+from gtm_detector.data.excel.in_loader import InnerWellDataLoader
+from gtm_detector.data.excel.out_loader import OutterDataLoader
+from gtm_detector.data.excel.config import *
+from gtm_detector.config.config import *
+from gtm_detector.features.feature_engineering import FeatureEngineer
+from gtm_detector.pipeline import GTMPipeline
+from gtm_detector.parsers.note_parser import NoteParser
+from gtm_detector.models.gtm_detector import *
+from gtm_detector.plot.visualize import Visualizer
+from helpers.time import TimeHelper
 
 
 if __name__ == "__main__":
 
-    model_names = \
+    input_path = join(getcwd(), "resources", "input_dataset.xlsx")
+    output_path = join(getcwd(), "resources", "output_dataset.xlsm")
+
+    # выгрузка выход.данных
+    outterExcelImportConfigs = \
     [
-        "qwen2.5:0.5b",
-        "llama3.2:1b",
-        "deepseek-r1:1.5b",
+        OutterExcelImportConfig\
+            (
+                sheet_name="Результат__16_54_11",
+                start_row_idx=5,
+                well_id_idx="E",
+                well_cluster_id_idx="D",
+                type_gtm_idx="AA",
+                success_idx="AN",
+                reason_stop_idx = "AO",
+                start_date_idx="AP",
+                end_date_idx="AQ"
+            )
+    ]
+    
+    outLoader = OutterDataLoader(output_path)
+    out_data_wells = outLoader.load_succes_and_contain_dates(outterExcelImportConfigs)
+
+    out_data_only_f_gtm_wells = []
+    for well in out_data_wells.get("Результат__16_54_11"):
+        if well.gtm_type.__contains__("Увеличение F"):
+            out_data_only_f_gtm_wells.append(well)
+        
+
+    # выгрузка вх.данных
+    innerExcelImportConfigs = \
+    [
+        InnerExcelImportConfig\
+            (
+                sheet_name="Qж",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Обв",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Qн",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Pлин",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Fэцн ТМ",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T",
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Рзаб",
+                start_row_idx=4,
+                well_id_idx="E",
+                well_cluster_id_idx="I",
+                start_date_idx="T"
+            ),
+        InnerExcelImportConfig\
+            (
+                sheet_name="Прим",
+                start_row_idx=3,
+                well_id_idx="D",
+                well_cluster_id_idx=None,
+                start_date_idx="H"
+            )
     ]
 
-    for model_name in model_names:
+    inLoader = InnerWellDataLoader(input_path)
+    in_data_wells = inLoader.load_wells_by_sheets1(innerExcelImportConfigs) 
 
-        try:
-            model = OllamaModel(model_name=model_name)
+    visualizer = Visualizer()
+    visualizer.visualize(in_data_wells, {"Результат__16_54_11" : out_data_only_f_gtm_wells}, save_path="results/success_and_has_dates/increase_f_gtm")
 
-            result = model.analyze_with_deepseek\
-            (
-                file_path=Constant.PATH_DATASET_CSV
-            )
-            
-            print("\n" + "="*40)
-            print("УСПЕШНО ПОЛУЧЕН JSON (Python Dict):")
-            print("="*40)
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            
-            print(f"\nМероприятие: {result.get('мероприятие')}")
-            print(f"Название: {result.get('название')}")
-            print(f"Дата: {result.get('дата')}")
+    #3. Расчёт признаков
+    pipeline_config = PipelineConfig()
+    note_parser = NoteParser()
+    engineer = FeatureEngineer(config=pipeline_config, note_parser=note_parser)
 
-        except Exception as e:
-            print(f"\n[Ошибка]: {e}")
-            continue
+    transformed_features = engineer.transform(wells)
+
+    #4. Детекция ГТМ нейросетью
+    detector = GTMDetector(
+        config=pipeline_config,
+        note_parser=note_parser,
+        model_path=Constant.WEIGHT_PATH
+    )
+    #detector.save_weights(Constant.WEIGHT_PATH)
+
+    # Обход всех скважин из исходной выгрузки
+
+    oil_dtos = wells.get("Qн", [])
+    unique_well_ids = list(dict.fromkeys([dto.well_id for dto in oil_dtos]))
+
+    results_list = []
+    for well_id in unique_well_ids:
+
+        # Сборка финального DataFrame для визуализации или отладки
+        df_well = detector.build_well_df(well_id, wells, transformed_features)
+
+        # Анализ скважины
+        verdict = detector.analyze_well_dtos(
+          well_id, wells, transformed_features
+        )
+
+        print(f"\n[Скважина {well_id}]")
+        print(f"  Размерность ряда: {len(df_well)} дней")
+        print(f"  Результат: {verdict.reasoning}")
+
+        # Формирование строки для итоговой таблицы
+        results_list.append\
+        (
+            {
+                "Скважина": verdict.well_id,
+                "Наличие ГТМ": "Да" if verdict.has_gtm else "Нет",
+                "Тип ГТМ": verdict.gtm_type if verdict.gtm_type else "-",
+                "Дата начала": \
+                (
+                    verdict.start_date.strftime("%Y-%m-%d")
+                    if verdict.start_date
+                    else "-"
+                ),
+                "Дата окончания": \
+                (
+                    verdict.end_date.strftime("%Y-%m-%d") if verdict.end_date else "-"
+                ),
+                "Обоснование": verdict.reasoning,
+            }
+        )
+
+    # 4. Сохранение результатов в Excel
+    df_results = pd.DataFrame(results_list)
+    df_results.to_csv(TimeHelper.get_path_h_m_s(), index=False)
