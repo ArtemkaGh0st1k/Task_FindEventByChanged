@@ -19,21 +19,30 @@ pip install -r req.txt
 2) Данные лежат в `resources/`: `input_dataset.xlsx` (замеры) и
 `output_dataset.xlsm` (расставленные даты). Пути - в `constants/path.py`.
 
-3) Поиск ГТМ + сравнение с расставленными датами:
+3) Полный прогон - поиск ГТМ, сравнение с расставленными датами, графики
+(~1-2 мин):
 
 ```bash
 python main.py
 ```
 
-Результат - `results/increase_freq/events_<дата>_<время>.xlsx`,
-метрики совпадения с разметкой печатаются в консоль.
+Всё складывается в папку прогона `results/increase_freq/<дата_время>/`:
+- `events.xlsx` - найденные ГТМ, сравнение с разметкой, параметры;
+- `summary.png` - сводка качества на одной странице;
+- `wells/совпало`, `wells/ошибка_дат`, `wells/пропущено` - графики скважин
+(F, Qж, Qн, обводнённость, простои; найденный и размеченный периоды).
+
+Метрики совпадения с разметкой печатаются в консоль.
 
 4) Другие режимы:
 
 ```bash
-python main.py detect                 # поиск ГТМ без сравнения (когда разметки нет)
+python main.py detect                 # только поиск ГТМ -> events.xlsx (когда разметки нет)
+python main.py detect --plots         # поиск + графики всех скважин с найденными ГТМ
+python main.py detect --results resources/output_dataset.xlsm --plots --all-wells
+                                      # + графики скважин без разметки (wells/нет_в_разметке)
 python main.py calibrate --cv 5       # подбор параметров по разметке -> params.json
-python main.py detect --measurements путь\к\замерам.xlsx --out путь\к\результату.xlsx
+python main.py detect --measurements путь\к\замерам.xlsx --out-dir путь\к\папке
 python main.py --help
 ```
 
@@ -112,7 +121,7 @@ python -m gtm_detector.increase_freq detect --results resources/output_dataset.x
     `all_gtms`: Все виды ГТМ с первоначального файлика Рината,
     которые успешны и имеют обе даты.
     `increase_f_gtm`: Только ГТМ с увеличением F
-- `increase_freq/`: выгрузки детектора `gtm_detector/increase_freq`
-(в git не попадают)
+- `increase_freq/<дата_время>/`: прогоны детектора `gtm_detector/increase_freq`
+(`events.xlsx`, `summary.png`, графики скважин в `wells/`)
 
 ---

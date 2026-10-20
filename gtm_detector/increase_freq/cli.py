@@ -4,6 +4,7 @@
 
     python -m gtm_detector.increase_freq calibrate   # подбор параметров по разметке
     python -m gtm_detector.increase_freq detect      # поиск мероприятий
+    python -m gtm_detector.increase_freq detect --plots   # + графики и сводка
 
 По умолчанию берутся resources/input_dataset.xlsx (замеры) и
 resources/output_dataset.xlsm (разметка) — см. constants/path.py.
@@ -22,7 +23,7 @@ from constants.path import Constant
 
 from .config import DetectorConfig
 from .detection import FrequencyIncreaseDetector
-from .evaluation import Calibrator, Evaluator
+from .evaluation import Calibrator, Evaluator, EventMatcher, Score
 from .excel import EventsExcelWriter, MeasurementsReader, ResultsReader, attach_labels
 from .models import Well
 
@@ -73,24 +74,41 @@ def run_calibrate(args: argparse.Namespace) -> int:
 def run_detect(args: argparse.Namespace) -> int:
     wells, labeled = load_wells(args.measurements, args.results)
     config = DetectorConfig.load(args.params)
-    detector = FrequencyIncreaseDetector(config)
+    events_by_well = FrequencyIncreaseDetector(config).detect_all(wells)
 
-    events_by_well = detector.detect_all(wells)
-    out = args.out or default_output_path()
-    EventsExcelWriter(out).write(wells, events_by_well, config)
+    out_dir = args.out_dir or default_run_dir()
+    excel_path = out_dir / "events.xlsx"
+    EventsExcelWriter(excel_path).write(wells, events_by_well, config)
 
     total = sum(len(events) for events in events_by_well.values())
     with_events = sum(1 for events in events_by_well.values() if events)
-    print(f"Найдено мероприятий: {total} на {with_events} скважинах -> {out}")
+    print(f"Найдено мероприятий: {total} на {with_events} скважинах -> {excel_path}")
+
+    score = None
     if labeled:
-        print("Сравнение с разметкой:\n  " + Evaluator().evaluate(config, labeled).summary())
+        matcher = EventMatcher()
+        score = Score()
+        for well in labeled:
+            score += matcher.score(events_by_well[well.well_id], well.labels, well.known_event_dates)
+        print("Сравнение с разметкой:\n  " + score.summary())
+
+    if args.plots:
+        # matplotlib нужен только для графиков — импортируем по требованию.
+        from .visualization import PlotReport
+
+        print("Строю графики...")
+        report = PlotReport(include_unlabeled=args.all_wells, workers=args.workers)
+        counts = report.build(wells, events_by_well, out_dir, score)
+        if score is not None:
+            print(f"  сводка: {out_dir / 'summary.png'}")
+        for status, count in counts.items():
+            print(f"  {out_dir / 'wells' / status.value}: {count} шт.")
     return 0
 
 
-def default_output_path() -> Path:
-    """results/increase_freq/events_ДД-ММ-ГГГГ_ЧЧ-ММ-СС.xlsx"""
-    stamp = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
-    return Constant.INCREASE_FREQ_RESULTS_DIR / f"events_{stamp}.xlsx"
+def default_run_dir() -> Path:
+    """results/increase_freq/ДД-ММ-ГГГГ_ЧЧ-ММ-СС/"""
+    return Constant.INCREASE_FREQ_RESULTS_DIR / datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
 
 
 def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
@@ -125,7 +143,18 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
         "--params", type=Path, default=Constant.INCREASE_FREQ_PARAMS, help="файл параметров (JSON)"
     )
     detect.add_argument(
-        "--out", type=Path, help="куда записать результат (по умолчанию results/increase_freq/)"
+        "--out-dir",
+        type=Path,
+        help="папка прогона (по умолчанию results/increase_freq/<дата_время>/)",
+    )
+    detect.add_argument("--plots", action="store_true", help="построить графики скважин и сводку качества")
+    detect.add_argument(
+        "--all-wells",
+        action="store_true",
+        help="с --plots: рисовать и скважины без разметки, где что-то найдено",
+    )
+    detect.add_argument(
+        "--workers", type=int, help="с --plots: сколько процессов рисуют графики (по умолчанию — по ядрам)"
     )
     detect.set_defaults(handler=run_detect)
     return parser

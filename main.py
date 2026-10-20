@@ -2,8 +2,9 @@
 
 Запуск из любой папки (пути к данным берутся из constants/path.py)::
 
-    python main.py                       # поиск ГТМ + сравнение с расставленными датами
-    python main.py detect                # поиск ГТМ без сравнения
+    python main.py                       # поиск ГТМ + сравнение с разметкой + графики
+    python main.py detect                # только поиск ГТМ (без сравнения и графиков)
+    python main.py detect --plots        # поиск + графики (без разметки — все найденные)
     python main.py calibrate --cv 5      # подбор параметров по разметке
     python main.py --help                # все команды и параметры
 
@@ -16,8 +17,9 @@ import sys
 from constants.path import Constant
 from gtm_detector.increase_freq.cli import main
 
-# Без аргументов: найти ГТМ во входных данных и сравнить с расставленными датами.
-DEFAULT_ARGS = ["detect", "--results", str(Constant.OUTPUT_DATASET)]
+# Без аргументов: полный прогон — найти ГТМ, сравнить с расставленными датами,
+# построить сводку качества и графики размеченных скважин.
+DEFAULT_ARGS = ["detect", "--results", str(Constant.OUTPUT_DATASET), "--plots"]
 
 
 if __name__ == "__main__":
