@@ -30,6 +30,16 @@
 .venv\Scriptsctivate
 ```
 
+Короче всего — через корневой `main.py` (без аргументов: поиск + сравнение с разметкой):
+
+```bash
+python main.py
+python main.py calibrate --cv 5
+```
+
+`main.py` принимает те же команды и параметры, что и
+`python -m gtm_detector.increase_freq`.
+
 Поиск мероприятий (разметка не нужна; результат —
 `results/increase_freq/events_<дата>_<время>.xlsx`):
 

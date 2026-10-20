@@ -1,6 +1,45 @@
 Проект создан для решения задад детекции начала `ГТМ`
 и конца `ГТМ`.
 
+Рабочий подход - `gtm_detector/increase_freq` (детектор ГТМ `увеличение частоты F`),
+точка входа - `main.py`.
+
+---
+
+# Запуск
+
+1) Окружение (один раз, нужен Python 3.11+):
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r req.txt
+```
+
+2) Данные лежат в `resources/`: `input_dataset.xlsx` (замеры) и
+`output_dataset.xlsm` (расставленные даты). Пути - в `constants/path.py`.
+
+3) Поиск ГТМ + сравнение с расставленными датами:
+
+```bash
+python main.py
+```
+
+Результат - `results/increase_freq/events_<дата>_<время>.xlsx`,
+метрики совпадения с разметкой печатаются в консоль.
+
+4) Другие режимы:
+
+```bash
+python main.py detect                 # поиск ГТМ без сравнения (когда разметки нет)
+python main.py calibrate --cv 5       # подбор параметров по разметке -> params.json
+python main.py detect --measurements путь\к\замерам.xlsx --out путь\к\результату.xlsx
+python main.py --help
+```
+
+5) Тесты (по желанию): `pip install pytest`, затем
+`python -m pytest gtm_detector/increase_freq/tests`.
+
 В ходе было реализовано два подхода:
 
 --- 

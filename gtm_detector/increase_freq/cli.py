@@ -93,9 +93,9 @@ def default_output_path() -> Path:
     return Constant.INCREASE_FREQ_RESULTS_DIR / f"events_{stamp}.xlsx"
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog=f"python -m {PACKAGE}",
+        prog=prog or f"python -m {PACKAGE}",
         description="Поиск мероприятий «увеличение частоты F» по суточным замерам скважин.",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="подробный лог")
@@ -131,8 +131,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def main(argv: Sequence[str] | None = None, prog: str | None = None) -> int:
+    args = build_parser(prog).parse_args(argv)
     logging.basicConfig(
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",

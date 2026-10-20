@@ -217,6 +217,3 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Детектор «увеличение F»: выгрузки и кэши с производственными данными
-results/increase_freq/
-gtm_detector/increase_freq/data/
