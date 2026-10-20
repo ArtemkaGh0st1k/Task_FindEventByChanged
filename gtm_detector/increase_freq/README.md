@@ -27,7 +27,7 @@
 для проекта (`.venv`, зависимости из `req.txt`: numpy, pandas, openpyxl).
 
 ```bash
-.venv\Scriptsctivate
+.venv/Scripts/activate
 ```
 
 Короче всего — через корневой `main.py` (без аргументов: поиск + сравнение с разметкой):
