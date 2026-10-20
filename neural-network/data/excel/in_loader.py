@@ -2,9 +2,9 @@ from typing import Literal, Any
 import pandas as pd
 from openpyxl.utils import column_index_from_string
 
-from gtm_detector.data.excel.base_loader import BaseDataLoader
-from gtm_detector.data.excel.config import *
-from gtm_detector.data.dto import *
+from data.excel.base_loader import BaseDataLoader
+from data.excel.config import *
+from data.dto import *
 
 class InnerWellDataLoader(BaseDataLoader):
     """Класс для выгрузки для вход.данных"""

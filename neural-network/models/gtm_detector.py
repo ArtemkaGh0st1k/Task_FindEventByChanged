@@ -6,9 +6,9 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-from gtm_detector.config.config import GTMVerdict, PipelineConfig
-from gtm_detector.data.dto import BaseObjectDto, StateDto
-from gtm_detector.parsers.note_parser import NoteParser
+from config.config import GTMVerdict, PipelineConfig
+from data.dto import BaseObjectDto, StateDto
+from parsers.note_parser import NoteParser
 
 
 class GTM1DCNN(nn.Module):

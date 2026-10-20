@@ -3,8 +3,8 @@ from pathlib import Path
 import pandas as pd
 from openpyxl.utils import column_index_from_string
 
-from gtm_detector.data.excel.config import WellConfig
-from gtm_detector.data.dto import *
+from data.excel.config import WellConfig
+from data.dto import *
 
 
 class BaseDataLoader(ABC):
