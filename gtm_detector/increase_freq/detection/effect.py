@@ -6,8 +6,8 @@ import math
 
 import pandas as pd
 
-from freq_events.config import DetectorConfig, EndRule, StartMode
-from freq_events.models import Baseline, EndReason, FrequencyStep
+from ..config import DetectorConfig, EndRule, StartMode
+from ..models import Baseline, EndReason, FrequencyStep
 
 
 def value_at(data: pd.DataFrame, column: str, position: int) -> float | None:

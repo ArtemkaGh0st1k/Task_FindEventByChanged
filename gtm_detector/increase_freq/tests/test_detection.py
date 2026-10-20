@@ -1,6 +1,6 @@
-from freq_events import EndReason, FrequencyIncreaseDetector
-from freq_events.detection import StepDetector
-from tests.conftest import day, make_well
+from gtm_detector.increase_freq import EndReason, FrequencyIncreaseDetector
+from gtm_detector.increase_freq.detection import StepDetector
+from gtm_detector.increase_freq.tests.conftest import day, make_well
 
 
 def test_step_start_and_end_by_oil(config):

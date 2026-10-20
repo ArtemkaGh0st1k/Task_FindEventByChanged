@@ -8,7 +8,7 @@ from datetime import date
 
 import numpy as np
 
-from freq_events.models import Event, Label
+from ..models import Event, Label
 
 
 def _mean_abs(values: Sequence[int]) -> float:

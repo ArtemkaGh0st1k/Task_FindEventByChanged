@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from freq_events.config import DetectorConfig
-from freq_events.detection.effect import (
+from ..config import DetectorConfig
+from ..detection.effect import (
     EffectEndFinder,
     EffectStartFinder,
     baseline_before,
     value_at,
 )
-from freq_events.detection.steps import StepDetector
-from freq_events.models import Event, FrequencyStep, Well
+from ..detection.steps import StepDetector
+from ..models import Event, FrequencyStep, Well
 
 
 class FrequencyIncreaseDetector:

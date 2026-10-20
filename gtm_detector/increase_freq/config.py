@@ -29,7 +29,7 @@ class DetectorConfig:
     """Параметры всех шагов алгоритма.
 
     Значения по умолчанию — разумная отправная точка; рабочие значения
-    подбираются по разметке классом :class:`~freq_events.evaluation.Calibrator`
+    подбираются по разметке классом :class:`~gtm_detector.increase_freq.evaluation.Calibrator`
     и хранятся в JSON (см. :meth:`save` / :meth:`load`).
     """
 

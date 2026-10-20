@@ -2,8 +2,8 @@ from datetime import date
 
 import pytest
 
-from freq_events import DetectorConfig, EndRule, StartMode, Well
-from freq_events.excel import ResultRecord, normalize_id, parse_date
+from gtm_detector.increase_freq import DetectorConfig, EndRule, StartMode, Well
+from gtm_detector.increase_freq.excel import ResultRecord, normalize_id, parse_date
 
 
 def test_config_json_roundtrip(tmp_path):

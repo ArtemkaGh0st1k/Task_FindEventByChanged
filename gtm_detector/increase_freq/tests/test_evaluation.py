@@ -1,5 +1,5 @@
-from freq_events import EventMatcher, FrequencyIncreaseDetector, Label
-from tests.conftest import day, make_well
+from gtm_detector.increase_freq import EventMatcher, FrequencyIncreaseDetector, Label
+from gtm_detector.increase_freq.tests.conftest import day, make_well
 
 
 def _detect_one(config):

@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from freq_events import DetectorConfig, EndRule, StartMode, Well
+from gtm_detector.increase_freq import DetectorConfig, EndRule, StartMode, Well
 
 START_DATE = date(2026, 1, 1)
 

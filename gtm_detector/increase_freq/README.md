@@ -1,4 +1,4 @@
-# TaskByRinat — детекция мероприятий «увеличение частоты F»
+# increase_freq — детекция ГТМ «увеличение частоты F» по правилам
 
 По суточным замерам скважин (частота ЭЦН, дебиты, обводнённость, состояние)
 определяет, было ли на скважине мероприятие **«увеличение частоты F»**, и если
@@ -6,6 +6,9 @@
 
 Пока есть размеченные технологами мероприятия, параметры алгоритма подбираются
 по ним. Потом подобранные параметры используются без разметки.
+
+Это третий подход в проекте (после `prompt-engineering` и `neural-network`):
+последовательность объяснимых правил, пороги которых подбираются по разметке.
 
 ## Содержание
 
@@ -20,39 +23,52 @@
 
 ## Быстрый старт
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate            # Windows; в Linux/macOS: source .venv/bin/activate
-pip install -e ".[dev]"
-```
-
-Подбор параметров по разметке (результат сохраняется в `params.json`):
+Все команды — из **корня проекта** (`Task_FindEventByChanged/`), окружение — общее
+для проекта (`.venv`, зависимости из `req.txt`: numpy, pandas, openpyxl).
 
 ```bash
-python -m freq_events calibrate --measurements Статистика_заполнения_замеров.xlsx --results Расчёт_НОРДС.xlsm --cv 5
+.venv\Scriptsctivate
 ```
 
-Поиск мероприятий (разметка не нужна; `--results` — только чтобы сравнить с ней):
+Поиск мероприятий (разметка не нужна; результат —
+`results/increase_freq/events_<дата>_<время>.xlsx`):
 
 ```bash
-python -m freq_events detect --measurements Статистика_заполнения_замеров.xlsx --params params.json --out events.xlsx
+python -m gtm_detector.increase_freq detect
 ```
+
+То же со сравнением с расставленными датами:
+
+```bash
+python -m gtm_detector.increase_freq detect --results resources/output_dataset.xlsm
+```
+
+Подбор параметров по разметке (перезаписывает `gtm_detector/increase_freq/params.json`):
+
+```bash
+python -m gtm_detector.increase_freq calibrate --cv 5
+```
+
+По умолчанию берутся файлы из `resources/` — пути заданы в `constants/path.py`
+(`Constant.INPUT_DATASET`, `Constant.OUTPUT_DATASET`, `Constant.INCREASE_FREQ_PARAMS`).
+Другие файлы — через `--measurements`, `--results`, `--params`, `--out`.
 
 Из Python:
 
 ```python
-from freq_events import DetectorConfig, FrequencyIncreaseDetector
-from freq_events.excel import MeasurementsReader
+from constants.path import Constant
+from gtm_detector.increase_freq import DetectorConfig, FrequencyIncreaseDetector
+from gtm_detector.increase_freq.excel import MeasurementsReader
 
-wells = MeasurementsReader("Статистика_заполнения_замеров.xlsx").read()
-detector = FrequencyIncreaseDetector(DetectorConfig.load("params.json"))
+wells = MeasurementsReader(Constant.INPUT_DATASET).read()
+detector = FrequencyIncreaseDetector(DetectorConfig.load(Constant.INCREASE_FREQ_PARAMS))
 for event in detector.detect(wells[0]):
     print(event.date_step, event.start, event.end, event.end_reason_title)
 ```
 
 ## Входные и выходные данные
 
-### Замеры — `Статистика_заполнения_замеров_*.xlsx`
+### Замеры — `resources/input_dataset.xlsx`
 
 Лист на параметр, строка — скважина, столбцы `ДД.ММ.ГГГГ` — суточные значения.
 
@@ -76,12 +92,20 @@ for event in detector.detect(wells[0]):
 см. `Well.from_dict`:
 
 ```python
-{"well_id": "124", "date": [...], "frequency": [...], "state": [...],
- "debit_liquid": [...], "debit_oil": [...], "watercut": [...],
- "pressue_zab": [...], "pressure_lineqr": [...]}
+{
+    "well_id": "124",
+    "date": [...],
+    "frequency": [...],
+    "state": [...],
+    "debit_liquid": [...],
+    "debit_oil": [...],
+    "watercut": [...],
+    "pressue_zab": [...],
+    "pressure_lineqr": [...],
+}
 ```
 
-### Разметка — лист `Результат__*` файла `Расчёт_НОРДС*.xlsm`
+### Разметка — лист `Результат__*` файла `resources/output_dataset.xlsm`
 
 В разметку попадают строки, где:
 
@@ -94,7 +118,7 @@ for event in detector.detect(wells[0]):
 используются как «известные»: срабатывание детектора рядом с ними не считается
 ложным.
 
-### Результат — `events.xlsx`
+### Результат — `results/increase_freq/events_*.xlsx`
 
 - **Мероприятия** — все найденные мероприятия: скважина, куст, день скачка
   частоты, начало и окончание эффекта, причина окончания, F до/после,
@@ -188,9 +212,9 @@ Qж, Qн и обводнённость в последний рабочий де
 ## Архитектура
 
 ```
-freq_events/
+gtm_detector/increase_freq/
 ├── __init__.py          публичный API пакета
-├── __main__.py          python -m freq_events
+├── __main__.py          python -m gtm_detector.increase_freq
 ├── cli.py               командная строка: calibrate / detect
 ├── config.py            DetectorConfig (все параметры), StartMode, EndRule
 ├── models.py            Well, Label, FrequencyStep, Baseline, Event, EndReason
@@ -201,12 +225,13 @@ freq_events/
 ├── evaluation/          качество и подбор параметров
 │   ├── matching.py      EventMatcher (найдено ↔ разметка), Score (метрики)
 │   └── calibration.py   Evaluator, Calibrator (подбор, кросс-валидация)
-└── excel/               ввод-вывод
-    ├── parsing.py       нормализация номеров, разбор дат с опечатками
-    ├── readers.py       MeasurementsReader, ResultsReader, WellIndex, attach_labels
-    └── writer.py        EventsExcelWriter
-tests/                   pytest: алгоритм, метрики, конфигурация и разбор Excel
-params.json              параметры, подобранные по разметке
+├── excel/               ввод-вывод
+│   ├── parsing.py       нормализация номеров, разбор дат с опечатками
+│   ├── readers.py       MeasurementsReader, ResultsReader, WellIndex, attach_labels
+│   └── writer.py        EventsExcelWriter
+├── tests/               pytest: алгоритм, метрики, конфигурация и разбор Excel
+├── params.json          параметры, подобранные по разметке
+└── Описание_работы_кода.docx   подробное описание по шагам
 ```
 
 Принципы:
@@ -286,12 +311,14 @@ params.json              параметры, подобранные по раз�
 
 ## Разработка
 
+Из корня проекта:
+
 ```bash
-pip install -e ".[dev]"
-pytest              # тесты
-ruff check .        # линтер
-ruff format .       # форматирование
+pip install pytest ruff
+python -m pytest gtm_detector/increase_freq/tests
+ruff check gtm_detector/increase_freq --line-length 110 --target-version py310
+ruff format gtm_detector/increase_freq --line-length 110
 ```
 
-Файлы с производственными данными (`data/`, `events*.xlsx`) в репозиторий не
-попадают — см. `.gitignore`.
+Выгрузки детектора (`results/increase_freq/`) содержат производственные данные
+и в репозиторий не попадают — см. корневой `.gitignore`.

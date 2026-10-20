@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from freq_events.config import DetectorConfig
-from freq_events.evaluation import EventMatcher
-from freq_events.models import Event, Well
+from ..config import DetectorConfig
+from ..evaluation import EventMatcher
+from ..models import Event, Well
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class EventsExcelWriter:
         comparison = self._comparison_table(wells, events_by_well)
         parameters = pd.Series(config.to_dict(), name="значение").map(str).to_frame()
 
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         with pd.ExcelWriter(self.path) as writer:
             events.to_excel(writer, sheet_name="Мероприятия", index=False)
             if not comparison.empty:

@@ -9,10 +9,10 @@ from typing import Any
 
 import numpy as np
 
-from freq_events.config import DetectorConfig, EndRule, StartMode
-from freq_events.detection import FrequencyIncreaseDetector
-from freq_events.evaluation.matching import EventMatcher, Score
-from freq_events.models import Well
+from ..config import DetectorConfig, EndRule, StartMode
+from ..detection import FrequencyIncreaseDetector
+from ..evaluation.matching import EventMatcher, Score
+from ..models import Well
 
 logger = logging.getLogger(__name__)
 

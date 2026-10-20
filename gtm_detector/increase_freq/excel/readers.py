@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from freq_events.excel.parsing import date_columns, normalize_id, parse_date
-from freq_events.models import Label, Well
+from ..excel.parsing import date_columns, normalize_id, parse_date
+from ..models import Label, Well
 
 logger = logging.getLogger(__name__)
 

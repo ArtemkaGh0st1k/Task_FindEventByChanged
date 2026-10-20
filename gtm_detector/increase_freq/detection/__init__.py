@@ -1,8 +1,8 @@
 """Алгоритм поиска мероприятий «увеличение частоты F»."""
 
-from freq_events.detection.detector import FrequencyIncreaseDetector
-from freq_events.detection.effect import EffectEndFinder, EffectStartFinder, baseline_before
-from freq_events.detection.steps import StepDetector
+from ..detection.detector import FrequencyIncreaseDetector
+from ..detection.effect import EffectEndFinder, EffectStartFinder, baseline_before
+from ..detection.steps import StepDetector
 
 __all__ = [
     "EffectEndFinder",

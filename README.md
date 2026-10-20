@@ -26,12 +26,36 @@
 
 ---
 
+--- 
+
+# gtm_detector/increase_freq
+
+3) Третий способ - детектор на правилах для ГТМ `увеличение частоты F`.
+По замерам ищется скачок частоты, затем начало эффекта (рост Qж/Qн выше
+режима «до») и его окончание (Qн вернулся к уровню «до» или остановка скважины).
+Пороги правил подбираются по расставленным датам (`resources/output_dataset.xlsm`).
+
+Запуск из корня проекта:
+
+```bash
+python -m gtm_detector.increase_freq detect --results resources/output_dataset.xlsm
+```
+
+Подробности - в `gtm_detector/increase_freq/README.md` и
+`gtm_detector/increase_freq/Описание_работы_кода.docx`.
+
+---
+
 ---
 
 # dirs
 
 `constants`:
-- `path.py`: хранит класс констр.переменн (url, пути к сохр и тд)
+- `path.py`: хранит класс констр.переменн (url, пути к сохр и тд),
+в т.ч. пути к `resources/*` и `params.json` для `increase_freq`
+
+`gtm_detector`:
+- `increase_freq/`: детектор ГТМ `увеличение частоты F` на правилах
 
 `helpers`:
 - `converter.py`: вспомогательный класс для конвертации (не использовал)
@@ -49,5 +73,7 @@
     `all_gtms`: Все виды ГТМ с первоначального файлика Рината,
     которые успешны и имеют обе даты.
     `increase_f_gtm`: Только ГТМ с увеличением F
+- `increase_freq/`: выгрузки детектора `gtm_detector/increase_freq`
+(в git не попадают)
 
 ---

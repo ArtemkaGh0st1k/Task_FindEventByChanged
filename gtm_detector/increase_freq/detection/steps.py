@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from freq_events.config import DetectorConfig
-from freq_events.models import FrequencyStep
+from ..config import DetectorConfig
+from ..models import FrequencyStep
 
 
 class StepDetector:
