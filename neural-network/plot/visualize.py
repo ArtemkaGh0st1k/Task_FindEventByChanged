@@ -3,7 +3,7 @@ from contextlib import closing
 import matplotlib.pyplot as plt
 import numpy as np
 
-from gtm_detector.data.dto import *
+from data.dto import *
 
 
 class Visualizer:

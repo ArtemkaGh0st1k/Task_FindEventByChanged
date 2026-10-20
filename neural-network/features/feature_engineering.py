@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 
-from gtm_detector.config.config import PipelineConfig
-from gtm_detector.data.dto import *
-from gtm_detector.parsers.note_parser import NoteParser
+from config.config import PipelineConfig
+from data.dto import *
+from parsers.note_parser import NoteParser
 
 
 class FeatureEngineer:

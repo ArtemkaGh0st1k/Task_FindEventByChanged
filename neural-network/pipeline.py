@@ -1,12 +1,12 @@
 from pathlib import Path
 from typing import Dict, Optional
 
-from gtm_detector.config.config import GTMVerdict, PipelineConfig
-from gtm_detector.data.excel.config import WellConfig
-from gtm_detector.data.excel.in_loader import InnerWellDataLoader
-from gtm_detector.features.feature_engineering import FeatureEngineer
-from gtm_detector.models.gtm_detector import GTMDetector
-from gtm_detector.parsers.note_parser import NoteParser
+from config.config import GTMVerdict, PipelineConfig
+from data.excel.config import WellConfig
+from data.excel.in_loader import InnerWellDataLoader
+from features.feature_engineering import FeatureEngineer
+from models.gtm_detector import GTMDetector
+from parsers.note_parser import NoteParser
 
 
 class GTMPipeline:

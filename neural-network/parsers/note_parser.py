@@ -1,6 +1,6 @@
 from typing import Optional
 
-from gtm_detector.data.dto import *
+from data.dto import *
 
 
 class NoteParser():
