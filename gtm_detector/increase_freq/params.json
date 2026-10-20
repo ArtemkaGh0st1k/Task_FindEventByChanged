@@ -1,0 +1,26 @@
+{
+    "min_working_freq": 10.0,
+    "smooth_window": 3,
+    "min_step": 0.1,
+    "min_total": 0.3,
+    "max_gap": 3,
+    "pre_window": 7,
+    "hold_days": 5,
+    "hold_tolerance": 0.5,
+    "skip_after_restart": true,
+    "start_mode": "rise",
+    "start_same_day": false,
+    "start_max_days": 30,
+    "start_default": 2,
+    "require_response": true,
+    "response_days": 14,
+    "end_rules": [
+        "oil"
+    ],
+    "liq_tol": 0.0,
+    "wc_tol": 0.0,
+    "oil_tol": 0.0,
+    "stop_days": 2,
+    "min_effect_days": 0,
+    "end_confirm_days": 3
+}
