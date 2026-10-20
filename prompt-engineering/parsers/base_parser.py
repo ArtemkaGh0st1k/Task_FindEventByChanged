@@ -85,5 +85,3 @@ class BaseParser(ABC):
                 
             f.write("=== ИТОГОВЫЙ ОТВЕТ (QWEN 2.5) ===\n")
             f.write(f"{cleaned_answer}\n")
-
-    
