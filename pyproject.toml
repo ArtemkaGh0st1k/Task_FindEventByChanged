@@ -1,0 +1,19 @@
+[tool.ruff]
+# PEP 8 допускает до 99 символов, если команда договорилась (раздел «Maximum Line Length»).
+line-length = 99
+target-version = "py312"
+extend-exclude = [".venv", "results", "resources"]
+
+[tool.ruff.lint]
+# E/W — pycodestyle (PEP 8), F — pyflakes, I — isort, N — PEP 8 naming,
+# UP — современный синтаксис, B — частые ошибки, NPY — numpy.
+select = ["E", "W", "F", "I", "N", "UP", "B", "NPY"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*" = ["N802", "N806"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["gtm_detector/ml_freq/tests"]

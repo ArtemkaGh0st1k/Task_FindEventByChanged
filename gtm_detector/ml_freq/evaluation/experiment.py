@@ -103,7 +103,12 @@ class CrossValidator:
                     "начало (модель)": hit.start if hit else None,
                     "окончание (модель)": hit.end if hit else None,
                     "Δ начала, дн": (hit.start - label.start).days if hit else None,
-                    "Δ окончания, дн": (hit.end - label.end).days if hit and hit.end and label.end else None,
+                    "Δ окончания, дн": (
+                        (hit.end - label.end).days
+                        if hit and hit.end and label.end and not label.censored
+                        else None
+                    ),
+                    "эффект продолжался": label.censored,
                 }
             )
         return rows

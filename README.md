@@ -43,7 +43,12 @@ scikit-learn (логистическая регрессия, случайный 
 python -m gtm_detector.ml_freq compare                      # сравнить все модели
 python -m gtm_detector.ml_freq train --model gboost         # обучить и сохранить
 python -m gtm_detector.ml_freq predict --model gboost       # найти мероприятия
+python -m gtm_detector.ml_freq audit                        # отчёт о качестве данных 2021–2026
 ```
+
+По умолчанию модели учатся на объединённых файлах 2021–2026 из `resources`;
+сдвинутые при склейке блоки статистики исправляются или исключаются автоматически
+(обоснование каждого решения — в выводе `audit`).
 
 Подробности и результаты - в `gtm_detector/ml_freq/README.md`.
 

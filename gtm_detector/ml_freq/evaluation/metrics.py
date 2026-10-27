@@ -106,7 +106,7 @@ class EventMatcher:
                 continue
             score.true_positives += 1
             score.start_errors.append((hit.start - label.start).days)
-            if label.end is not None:
+            if label.end is not None and not label.censored:  # у censored конец эффекта неизвестен
                 if hit.end is None:
                     score.open_ends += 1
                 else:

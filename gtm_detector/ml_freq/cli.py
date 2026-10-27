@@ -6,6 +6,10 @@
     python -m gtm_detector.ml_freq compare --models transformer gboost
     python -m gtm_detector.ml_freq train --model transformer    # обучить на всех данных, сохранить веса
     python -m gtm_detector.ml_freq predict --model transformer  # найти мероприятия (разметка не нужна)
+    python -m gtm_detector.ml_freq audit                        # отчёт о качестве данных 2021–2026
+
+По умолчанию — объединённые файлы 2021–2026 (``--dataset merged``); первые
+тестовые файлы — ``--dataset test``.
 """
 
 from __future__ import annotations
@@ -19,8 +23,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from .audit import add_arguments as audit_arguments
+from .audit import run as run_audit
 from .config import DataConfig, ExperimentConfig, TrainingConfig
-from .data import WellRepository
+from .data import MergedWellRepository, WellRepository
 from .evaluation import ComparisonReport, CrossValidator, SegmentDecoder
 from .models import TransformerSegmenter, load_model, model_registry
 
@@ -40,9 +46,19 @@ def _registry(args: argparse.Namespace) -> dict:
     return registry
 
 
+def load_wells(args: argparse.Namespace, labeled: bool) -> list:
+    """Скважины выбранного набора данных; ``labeled`` — только с разметкой."""
+    if args.dataset == "merged":
+        reference = None if args.no_reference else args.reference
+        wells = MergedWellRepository(args.statistics, args.labels, reference).load()
+    else:
+        wells = WellRepository(args.measurements, args.results if labeled else None).load()
+    return [well for well in wells if well.labels] if labeled else wells
+
+
 def run_compare(args: argparse.Namespace) -> int:
-    data = DataConfig(measurements=args.measurements, results=args.results)
-    wells = [well for well in WellRepository(data.measurements, data.results).load() if well.labels]
+    data = DataConfig()
+    wells = load_wells(args, labeled=True)
     registry = _registry(args)
     unknown = set(args.models) - set(registry)
     if unknown:
@@ -64,8 +80,8 @@ def run_compare(args: argparse.Namespace) -> int:
 
 
 def run_train(args: argparse.Namespace) -> int:
-    data = DataConfig(measurements=args.measurements, results=args.results)
-    wells = [well for well in WellRepository(data.measurements, data.results).load() if well.labels]
+    data = DataConfig()
+    wells = load_wells(args, labeled=True)
     model = _registry(args)[args.model]()
     model.fit(wells)
     path = data.weights_dir / f"{model.name}{model.file_suffix}"
@@ -75,10 +91,10 @@ def run_train(args: argparse.Namespace) -> int:
 
 
 def run_predict(args: argparse.Namespace) -> int:
-    data = DataConfig(measurements=args.measurements)
+    data = DataConfig()
     path = args.weights or _find_weights(data.weights_dir, args.model)
     model = load_model(path)
-    wells = WellRepository(data.measurements, None).load()
+    wells = load_wells(args, labeled=False)
     decoder = SegmentDecoder()
 
     rows = []
@@ -122,12 +138,25 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true", help="подробный лог")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    def common(sub: argparse.ArgumentParser, with_results: bool = True) -> None:
-        sub.add_argument("--measurements", type=Path, default=defaults.measurements, help="файл замеров")
-        if with_results:
-            sub.add_argument("--results", type=Path, default=defaults.results, help="файл с разметкой")
+    def common(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument(
+            "--dataset",
+            choices=("merged", "test"),
+            default=defaults.dataset,
+            help="merged — объединённые файлы 2021–2026, test — первые тестовые (resources/test_datas)",
+        )
+        sub.add_argument("--statistics", type=Path, default=defaults.statistics, help="merged: статистика")
+        sub.add_argument("--labels", type=Path, default=defaults.labels, help="merged: итоговый файл")
+        sub.add_argument(
+            "--reference", type=Path, default=defaults.reference, help="merged: выгрузка для сверки сдвигов"
+        )
+        sub.add_argument("--no-reference", action="store_true", help="merged: не сверять с выгрузкой")
+        sub.add_argument("--measurements", type=Path, default=defaults.measurements, help="test: замеры")
+        sub.add_argument("--results", type=Path, default=defaults.results, help="test: разметка")
         sub.add_argument("--seed", type=int, default=0, help="зерно случайности")
-        sub.add_argument("--epochs", type=int, help="эпох обучения Transformer (по умолчанию 40)")
+        sub.add_argument(
+            "--epochs", type=int, help=f"эпох обучения Transformer (по умолчанию {TrainingConfig().epochs})"
+        )
 
     compare = commands.add_parser("compare", help="перекрёстная проверка и сравнение моделей")
     common(compare)
@@ -144,11 +173,15 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     train.set_defaults(handler=run_train)
 
     predict = commands.add_parser("predict", help="найти мероприятия обученной моделью")
-    common(predict, with_results=False)
+    common(predict)
     predict.add_argument("--model", choices=names, default="transformer")
     predict.add_argument("--weights", type=Path, help="файл весов (по умолчанию из ml_freq/weights)")
     predict.add_argument("--out-dir", type=Path, help="папка результата")
     predict.set_defaults(handler=run_predict)
+
+    audit = commands.add_parser("audit", help="отчёт о качестве объединённых данных 2021–2026")
+    audit_arguments(audit, defaults)
+    audit.set_defaults(handler=run_audit)
     return parser
 
 

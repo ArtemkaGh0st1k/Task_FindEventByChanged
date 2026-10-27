@@ -25,6 +25,9 @@ class Interval:
     start: date
     end: date | None
     date_done: date | None = None  # «Дата выполнения» (только в разметке)
+    # Мониторинг остановлен, а эффект продолжался («ПРОДОЛЖАЕТСЯ ЭФФЕКТ»):
+    # ``end`` — не конец эффекта, а последний день наблюдения.
+    censored: bool = False
 
     def covers(self, day: date, last_day: date) -> bool:
         return self.start <= day <= (self.end or last_day)
@@ -65,6 +68,7 @@ class WellSeries:
         В разметке есть не все реальные подъёмы частоты, поэтому «вне разметки» не
         значит «эффекта нет». Надёжны только окрестности размеченных мероприятий:
         ``context_days`` дней до начала и после окончания. ``None`` — все дни.
+        После окончания ``censored``-мероприятия эффект неизвестен — эти дни не берутся.
         """
         days = self.frame.index
         if context_days is None:
@@ -73,5 +77,6 @@ class WellSeries:
         margin = pd.Timedelta(days=context_days)
         for label in self.labels:
             end = pd.Timestamp(label.end) if label.end else days[-1]
-            mask[(days >= pd.Timestamp(label.start) - margin) & (days <= end + margin)] = True
+            after = end if label.censored else end + margin
+            mask[(days >= pd.Timestamp(label.start) - margin) & (days <= after)] = True
         return mask

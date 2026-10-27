@@ -76,7 +76,7 @@ class MeasurementsReader:
         self.path = Path(path)
 
     def read(self) -> list[WellSeries]:
-        tables = {name: self._read_parameter(sheet) for name, sheet in self.SHEETS.items()}
+        tables = {name: self.read_parameter(sheet) for name, sheet in self.SHEETS.items()}
         states = self._read_states()
         frequency = tables["frequency"]
         calendar = pd.date_range(frequency.columns.min(), frequency.columns.max(), freq="D")
@@ -94,7 +94,7 @@ class MeasurementsReader:
         logger.info("Замеры: %d скважин, %s — %s", len(wells), calendar[0].date(), calendar[-1].date())
         return wells
 
-    def _read_parameter(self, sheet: str) -> pd.DataFrame:
+    def read_parameter(self, sheet: str) -> pd.DataFrame:
         table = pd.read_excel(self.path, sheet_name=sheet, header=1).iloc[1:]
         dates = {}
         for column in table.columns:
