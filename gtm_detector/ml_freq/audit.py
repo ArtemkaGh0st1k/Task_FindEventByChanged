@@ -82,6 +82,16 @@ from .config import DataConfig  # noqa: E402
 from .data import DataAudit, MergedWellRepository  # noqa: E402
 from .data.dataset import ACCEPTED  # noqa: E402
 
+# Главные причины отказа -> пояснение для технологов (файл rejected_labels.csv).
+REJECTED = {
+    "скважины нет в статистике": "скважины с таким номером/кустом нет в файле статистики",
+    "нет замеров около даты начала": "у скважины нет замеров за ±14 дней от даты начала",
+    "частота в замерах не поднялась около даты начала": (
+        "в ±3 дня от даты начала частота не выросла: ни до «Нового значения», "
+        "ни на половину запланированного прироста"
+    ),
+}
+
 # Цвета: линии — нейтральный и первый категориальный; заливка решений — светлые ступени.
 COLORS = {"before": "#9a9993", "after": "#2a78d6", "shifted": "#cde2fb", "dropped": "#fbd9cb"}
 
@@ -178,8 +188,18 @@ class DataAuditReport:
         )
         return "\n".join(lines)
 
-    def save(self, out_dir: Path) -> tuple[Path, Path]:
+    def rejected_table(self) -> pd.DataFrame:
+        """Мероприятия, отброшенные по трём главным причинам, — для уточнения у технологов."""
+        table = self.audit.labels[self.audit.labels["решение"].isin(REJECTED)].copy()
+        table["пояснение"] = table["решение"].map(REJECTED)
+        table = table.rename(columns={"решение": "причина"})
+        return table.sort_values(["причина", "год", "скважина"])
+
+    def save(self, out_dir: Path) -> tuple[Path, Path, Path]:
         out_dir.mkdir(parents=True, exist_ok=True)
+        csv = out_dir / "rejected_labels.csv"
+        # «;» и BOM — чтобы Excel с русской локалью открыл файл без настройки импорта.
+        self.rejected_table().to_csv(csv, sep=";", index=False, encoding="utf-8-sig")
         xlsx = out_dir / "data_audit.xlsx"
         with pd.ExcelWriter(xlsx) as writer:
             self.segments_table().to_excel(writer, sheet_name="сегменты", index=False)
@@ -190,7 +210,7 @@ class DataAuditReport:
             )
         png = out_dir / "data_audit.png"
         self.plot(png)
-        return xlsx, png
+        return xlsx, png, csv
 
     def plot(self, path: Path) -> None:
         a = self.audit
@@ -260,8 +280,8 @@ def run(args: argparse.Namespace) -> int:
     _, audit = MergedWellRepository(args.statistics, args.labels, reference).build()
     report = DataAuditReport(audit)
     print(report.to_text())
-    xlsx, png = report.save(args.out_dir)
-    print(f"\nТаблицы: {xlsx}\nГрафик:  {png}")
+    xlsx, png, csv = report.save(args.out_dir)
+    print(f"\nТаблицы: {xlsx}\nГрафик:  {png}\nОтброшенные мероприятия: {csv}")
     return 0
 
 
