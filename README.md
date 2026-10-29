@@ -50,7 +50,16 @@ python -m gtm_detector.ml_freq audit                        # отчёт о ка
 сдвинутые при склейке блоки статистики исправляются или исключаются автоматически
 (обоснование каждого решения — в выводе `audit`).
 
-Подробности и результаты - в `gtm_detector/ml_freq/README.md`.
+Подробности и результаты - в `gtm_detector/ml_freq/README.md`. Разбор каждого класса,
+функции и метода с примерами из проекта — в `gtm_detector/ml_freq/Построчный_разбор_ml_freq.pdf`
+(собирается из кода: `python -X utf8 docs/ml_freq_walkthrough/build.py`).
+
+Отладка в VS Code: готовые конфигурации для `audit`, `compare`, `train`, `predict` и тестов —
+в `.vscode/launch.json` (вкладка Run and Debug, F5).
+
+Документацию ведёт агент Claude Code `docs-maintainer` (`.claude/agents/`): после каждого
+ответа с изменениями в проекте его вызывает Stop-хук `.claude/hooks/docs_sync.py`.
+Все агенты проекта описаны в `docs/CLAUDE_AGENTS.md`.
 
 ---
 

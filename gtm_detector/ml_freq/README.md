@@ -233,8 +233,14 @@ gtm_detector/ml_freq/
 │   ├── experiment.py       CrossValidator, ModelResult
 │   └── report.py           ComparisonReport: comparison.xlsx + comparison.png
 ├── tests/                  pytest на синтетических скважинах
-└── weights/                сохранённые модели (после train)
+├── weights/                сохранённые модели (после train)
+└── Построчный_разбор_ml_freq.pdf   разбор каждого класса, функции и метода с примерами
 ```
+
+PDF-разбор собирается из кода и пояснений в `docs/ml_freq_walkthrough/explanations/`
+командой `python -X utf8 docs/ml_freq_walkthrough/build.py` (печатает Microsoft Edge без
+окна). `--check` показывает, к каким объектам пояснения нет или код изменился после
+проверки пояснения. Обновляет документ агент `docs-maintainer`.
 
 Новая модель добавляется наследником `EventSegmenter` и строкой в `model_registry()`
 (`models/__init__.py`) — сравнение, отчёт и `predict` подхватят её сами.

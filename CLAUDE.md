@@ -25,6 +25,8 @@ Claude Code читает этот файл в начале каждой сесс
 | `constants/`, `helpers/`, `main.py` | общие утилиты прежних подходов | устаревший код |
 | `resources/` | исходные Excel-файлы (замеры, разметка) | **только чтение** |
 | `results/ml_freq/` | отчёты команд `compare`, `predict`, `audit` | создаются автоматически |
+| `docs/ml_freq_walkthrough/` | генератор PDF «Построчный разбор ml_freq» (`build.py`) и пояснения к каждому объекту кода (`explanations/`) | ведёт агент `docs-maintainer` |
+| `.claude/` | агенты (`agents/`), Stop-хук обновления документации (`hooks/docs_sync.py`, `settings.json`) | |
 
 Подробное описание архитектуры, признаков и результатов —
 `gtm_detector/ml_freq/README.md`. Прочитай его перед любой работой в `ml_freq`.
@@ -56,7 +58,14 @@ Claude Code читает этот файл в начале каждой сесс
 .venv/Scripts/python -m gtm_detector.ml_freq compare                 # все модели, около 15 мин на процессоре
 .venv/Scripts/python -m gtm_detector.ml_freq compare --models transformer --epochs 20  # быстрая проверка
 .venv/Scripts/python -m gtm_detector.ml_freq audit                   # аудит данных 2021–2026
+.venv/Scripts/python -X utf8 docs/ml_freq_walkthrough/build.py --check   # какие пояснения к PDF устарели
+.venv/Scripts/python -X utf8 docs/ml_freq_walkthrough/build.py           # собрать PDF-разбор (около минуты)
 ```
+
+После каждого ответа, в котором менялись файлы проекта, Stop-хук `.claude/hooks/docs_sync.py`
+просит вызвать агента `docs-maintainer`: он обновляет README, пояснения и PDF-разбор и
+предлагает описание коммита. Агент не видит переписку — в задаче для него кратко перечисли,
+что и зачем изменилось.
 
 Долгие команды (`compare` для всех моделей, `train --model transformer`) запускай в фоне.
 Первое чтение Excel занимает около 30 секунд, дальше данные берутся из кэша
