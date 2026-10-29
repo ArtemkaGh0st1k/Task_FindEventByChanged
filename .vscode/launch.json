@@ -1,0 +1,106 @@
+{
+  // Отладка команд gtm_detector.ml_freq: вкладка Run and Debug (Ctrl+Shift+D), запуск — F5.
+  // Интерпретатор — .venv (Ctrl+Shift+P → Python: Select Interpreter).
+  // Результаты отладочных запусков compare/predict — в results/ml_freq/debug.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "audit — отчёт о данных 2021–2026",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "gtm_detector.ml_freq",
+      "args": ["audit"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "compare — gboost (быстро)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "gtm_detector.ml_freq",
+      "args": ["compare", "--models", "gboost", "--out-dir", "results/ml_freq/debug/compare"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "compare — transformer, 2 эпохи",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "gtm_detector.ml_freq",
+      "args": [
+        "compare", "--models", "transformer", "--epochs", "2",
+        "--out-dir", "results/ml_freq/debug/compare"
+      ],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "compare — выбранные модели",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "gtm_detector.ml_freq",
+      "args": [
+        "compare", "--models", "${input:models}",
+        "--out-dir", "results/ml_freq/debug/compare"
+      ],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      // Перезаписывает веса в gtm_detector/ml_freq/weights!
+      "name": "train — выбранная модель (перезапишет веса)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "gtm_detector.ml_freq",
+      "args": ["train", "--model", "${input:model}"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "predict — выбранная модель",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "gtm_detector.ml_freq",
+      "args": [
+        "predict", "--model", "${input:model}",
+        "--out-dir", "results/ml_freq/debug/predict"
+      ],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "pytest — все тесты",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["gtm_detector/ml_freq/tests", "-q"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false
+    },
+    {
+      "name": "pytest — текущий файл",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-q"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false
+    }
+  ],
+  "inputs": [
+    {
+      "id": "model",
+      "type": "pickString",
+      "description": "Модель",
+      "options": ["gboost", "random_forest", "extra_trees", "logreg", "transformer"],
+      "default": "gboost"
+    },
+    {
+      "id": "models",
+      "type": "pickString",
+      "description": "Модель для сравнения",
+      "options": ["gboost", "random_forest", "extra_trees", "logreg", "transformer"],
+      "default": "gboost"
+    }
+  ]
+}
