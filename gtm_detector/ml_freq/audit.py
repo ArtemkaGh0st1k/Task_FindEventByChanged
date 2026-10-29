@@ -78,9 +78,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from .config import DataConfig  # noqa: E402
-from .data import DataAudit, MergedWellRepository  # noqa: E402
+from .config import CONTEXT_DAYS, DataConfig  # noqa: E402
+from .data import DataAudit, MergedWellRepository, WellSeries  # noqa: E402
 from .data.dataset import ACCEPTED  # noqa: E402
+from .data.statistics import MergedStatisticsReader  # noqa: E402
 
 # Главные причины отказа -> пояснение для технологов (файл rejected_labels.csv).
 REJECTED = {
@@ -90,6 +91,29 @@ REJECTED = {
         "в ±3 дня от даты начала частота не выросла: ни до «Нового значения», "
         "ни на половину запланированного прироста"
     ),
+}
+
+# Листы training_data.xlsx — с именами и в порядке исходного файла статистики.
+STATISTICS_SHEETS = {
+    "debit_liquid": "Qж (из OIS)",
+    "watercut": "Обв (из OIS)",
+    "debit_oil": "Qн (из OIS)",
+    "pressure_line": "Рлин (из OIS)",
+    "frequency": "Fэцн ТМ(сут)",
+    "pressure_zab": "Рзаб",
+}
+
+# Столбцы разметки -> заголовки итогового файла технологов.
+LABEL_HEADERS = {
+    "куст": "Куст",
+    "скважина": "Скважина",
+    "тип ГТМ": "Тип ГТМ",
+    "начало": "дата начала мониторинга",
+    "окончание": "дата окончания мониторинга",
+    "частота до, Гц": "Текущее значение",
+    "частота после, Гц": "Новое значение",
+    "причина окончания": "Причина прекращения мониторинга",
+    "год": "Год",
 }
 
 # Цвета: линии — нейтральный и первый категориальный; заливка решений — светлые ступени.
@@ -242,6 +266,65 @@ class DataAuditReport:
         plt.close(figure)
 
 
+class TrainingDataReport:
+    """Данные, на которых учатся модели: принятая разметка и исправленные замеры.
+
+    Замеры — после исправления сдвига на 180 дней и исключения сегментов, только по
+    скважинам с принятой разметкой, в раскладке исходного файла статистики:
+    лист на параметр, строка — скважина, столбец — дата.
+    """
+
+    def __init__(
+        self, wells: Sequence[WellSeries], audit: DataAudit, context_days: int = CONTEXT_DAYS
+    ) -> None:
+        self.wells = [well for well in wells if well.labels]
+        self.audit = audit
+        self.context_days = context_days
+        start = min(well.frame.index[0] for well in self.wells)
+        end = max(well.frame.index[-1] for well in self.wells)
+        self.dates = pd.date_range(start, end)
+
+    def labels_table(self) -> pd.DataFrame:
+        table = self.audit.labels[self.audit.labels["решение"] == ACCEPTED]
+        columns = ["строка Excel", *LABEL_HEADERS, "эффект продолжался"]
+        table = table[columns].rename(columns=LABEL_HEADERS)
+        return table.sort_values(["Скважина", "дата начала мониторинга"])
+
+    def wide(self, rows: Sequence[pd.Series]) -> pd.DataFrame:
+        """Ряды скважин -> таблица «скважина × дата» с заголовками как в исходном файле."""
+        values = [row.reindex(self.dates).to_numpy() for row in rows]
+        table = pd.DataFrame(values, columns=self.dates)
+        table.columns = [day.strftime("%d.%m.%Y") for day in self.dates]
+        ids = pd.DataFrame(
+            {
+                MergedStatisticsReader.NUMBER: [well.number for well in self.wells],
+                MergedStatisticsReader.CLUSTER: [well.cluster for well in self.wells],
+            }
+        )
+        return pd.concat([ids, table], axis=1)
+
+    def target_table(self) -> pd.DataFrame:
+        """1 — день эффекта по разметке, 0 — эффекта нет; пусто — день не участвует в обучении."""
+        rows = []
+        for well in self.wells:
+            target = pd.Series(well.target(), index=well.frame.index)
+            rows.append(target.where(well.training_mask(self.context_days)))
+        return self.wide(rows)
+
+    def save(self, path: Path) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        freeze = (1, 2)  # заголовок и номера скважины/куста видны при прокрутке
+        with pd.ExcelWriter(path) as writer:
+            self.labels_table().to_excel(writer, sheet_name="мероприятия", index=False)
+            for column, sheet in STATISTICS_SHEETS.items():
+                table = self.wide([well.frame[column] for well in self.wells])
+                table.to_excel(writer, sheet_name=sheet, index=False, freeze_panes=freeze)
+            self.target_table().to_excel(
+                writer, sheet_name="разметка по дням", index=False, freeze_panes=freeze
+            )
+        return path
+
+
 def _evidence(e) -> str:
     return f"{e.confirmed}/{e.tested}" if e is not None and e.tested else "—"
 
@@ -277,11 +360,13 @@ def add_arguments(parser: argparse.ArgumentParser, defaults: DataConfig) -> None
 
 def run(args: argparse.Namespace) -> int:
     reference = None if args.no_reference else args.reference
-    _, audit = MergedWellRepository(args.statistics, args.labels, reference).build()
+    wells, audit = MergedWellRepository(args.statistics, args.labels, reference).build()
     report = DataAuditReport(audit)
     print(report.to_text())
     xlsx, png, csv = report.save(args.out_dir)
+    training = TrainingDataReport(wells, audit).save(args.out_dir / "training_data.xlsx")
     print(f"\nТаблицы: {xlsx}\nГрафик:  {png}\nОтброшенные мероприятия: {csv}")
+    print(f"Данные для обучения: {training}")
     return 0
 
 
