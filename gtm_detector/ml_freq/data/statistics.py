@@ -1,21 +1,26 @@
-"""Чтение объединённых файлов 2021–2026.
+"""Чтение статистики и разметки 2020–2026.
 
-* Статистика (``Статистика_с_2021_2026_в_одном_файле.xlsx``): лист на параметр,
-  строка — скважина, столбцы — даты 01.01.2020–31.12.2026. Файл склеен макросом
-  из отдельных выгрузок; часть блоков записана со сдвигом — их чинит :mod:`.repair`.
-* Разметка (``Итоговый_файл_c_2021_2026.xlsx``): лист «Лист1», строка — мероприятие.
+* Статистика по полугодиям (``resources/statistics/<год>/*.xls``, 14 файлов): лист на
+  параметр, строка — скважина, столбцы — даты периода. Основной источник
+  (:class:`HalfYearStatisticsReader`): файлы исходные, сдвигов в них нет.
+* Склеенная статистика (один ``.xlsx``, те же листы, даты 2020–2026): прежний источник
+  (:class:`MergedStatisticsReader`). Склеена макросом, часть блоков записана со сдвигом —
+  их чинит :mod:`.repair`.
+* Разметка (``labeled_data.xlsx``): лист «Лист1», строка — мероприятие.
 """
 
 from __future__ import annotations
 
 import logging
 import re
+import struct
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import xlrd
 
 from .readers import normalize_id, parse_date
 
@@ -78,6 +83,126 @@ class MergedStatisticsReader:
 
         keep = (values.index.get_level_values(0) != "") & ~values.index.duplicated()
         return values[keep], pd.Series(bad, index=values.columns)
+
+
+class HalfYearStatisticsReader:
+    """Папка с полугодовыми файлами ``.xls`` -> таблицы «скважина × дата» по параметрам.
+
+    Результат — как у :class:`MergedStatisticsReader`: столбцы — непрерывный календарь
+    от первой до последней даты файлов, скважины — объединение по всем файлам.
+    """
+
+    FILES = "*/*.xls"  # <год>/<файл>.xls
+
+    def __init__(self, directory: Path) -> None:
+        self.directory = Path(directory)
+        self.non_numeric = pd.Series(dtype=int)
+
+    def files(self) -> list[Path]:
+        return sorted(self.directory.glob(self.FILES))
+
+    def read(self) -> dict[str, pd.DataFrame]:
+        files = self.files()
+        if not files:
+            raise FileNotFoundError(f"Нет файлов статистики {self.FILES} в {self.directory}")
+        sheets = MergedStatisticsReader.SHEETS
+        parts: dict[str, list[pd.DataFrame]] = {name: [] for name in sheets}
+        garbage = []
+        for path in files:
+            book = xlrd.open_workbook(file_contents=_workbook_stream(path), on_demand=True)
+            for name, prefix in sheets.items():
+                title = next(
+                    s for s in book.sheet_names() if normalize_id(s).startswith(normalize_id(prefix))
+                )
+                table, bad = _sheet_table(book.sheet_by_name(title))
+                parts[name].append(table)
+                garbage.append(bad)
+            book.release_resources()
+        tables = {name: _join_periods(frames) for name, frames in parts.items()}
+        self.non_numeric = pd.concat(garbage).groupby(level=0).sum()
+        logger.info(
+            "Статистика: %d файлов, %d скважин, %d дат",
+            len(files),
+            len(tables["frequency"]),
+            tables["frequency"].shape[1],
+        )
+        return tables
+
+
+def _workbook_stream(path: Path) -> bytes:
+    """Поток ``Workbook`` из файла OLE2 (старый формат Excel), без разбора контейнера в xlrd.
+
+    Выгрузки сохранены не самим Excel: цепочка секторов потока длиннее, чем размер в
+    каталоге файла, и xlrd отказывается их открывать («size exceeds expected»). Лишнее —
+    только заполнение последних секторов; саму книгу xlrd читает из потока как обычно.
+    """
+    data = Path(path).read_bytes()
+    sector = 1 << struct.unpack_from("<H", data, 30)[0]
+
+    def ints(sid: int) -> tuple[int, ...]:
+        return struct.unpack_from(f"<{sector // 4}i", data, (sid + 1) * sector)
+
+    fat_count, directory = struct.unpack_from("<ii", data, 44)
+    extra = struct.unpack_from("<i", data, 68)[0]
+    fat_sectors = list(struct.unpack_from("<109i", data, 76))
+    while extra >= 0:  # больше 109 секторов таблицы: продолжение списка в отдельных секторах
+        values = ints(extra)
+        fat_sectors.extend(values[:-1])
+        extra = values[-1]
+    fat = [link for sid in fat_sectors[:fat_count] for link in ints(sid)]
+
+    for sid in _chain(fat, directory):
+        for offset in range(0, sector, 128):
+            entry = data[(sid + 1) * sector + offset :][:128]
+            length = struct.unpack_from("<H", entry, 64)[0]
+            if entry[: max(length - 2, 0)].decode("utf-16-le") == "Workbook":
+                start = struct.unpack_from("<i", entry, 116)[0]
+                return b"".join(data[(s + 1) * sector :][:sector] for s in _chain(fat, start))
+    raise ValueError(f"В файле {path} нет потока Workbook")
+
+
+def _chain(fat: list[int], start: int) -> list[int]:
+    """Номера секторов потока: отрицательная ссылка — конец цепочки."""
+    chain = []
+    while start >= 0:
+        chain.append(start)
+        start = fat[start]
+    return chain
+
+
+def _sheet_table(sheet) -> tuple[pd.DataFrame, pd.Series]:
+    """Лист xlrd -> таблица «скважина × дата» и число не-чисел по датам."""
+    header = pd.Series(sheet.row_values(MergedStatisticsReader.HEADER_ROW))
+    number = _position(header, MergedStatisticsReader.NUMBER)
+    cluster = _position(header, MergedStatisticsReader.CLUSTER)
+    columns = {i: _header_date(value) for i, value in header.items()}
+    columns = {i: day for i, day in columns.items() if day is not None}
+    positions = list(columns)
+
+    index, rows = [], []
+    bad = np.zeros(len(positions), dtype=int)
+    for r in range(MergedStatisticsReader.HEADER_ROW + 2, sheet.nrows):
+        values, types = sheet.row_values(r), sheet.row_types(r)
+        well = normalize_id(values[number])
+        if not well:
+            continue
+        kinds = np.array([types[i] for i in positions])
+        numeric = kinds == xlrd.XL_CELL_NUMBER
+        bad += ~numeric & ~np.isin(kinds, (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK))
+        row = np.full(len(positions), np.nan)
+        row[numeric] = [values[i] for i, ok in zip(positions, numeric, strict=True) if ok]
+        index.append((well, normalize_id(values[cluster])))
+        rows.append(row)
+    days = list(columns.values())
+    table = pd.DataFrame(rows, index=pd.MultiIndex.from_tuples(index), columns=days, dtype=float)
+    return table[~table.index.duplicated()], pd.Series(bad, index=days)
+
+
+def _join_periods(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    """Таблицы периодов -> одна на непрерывном календаре; при наложении дат верен поздний файл."""
+    table = pd.concat(frames, axis=1, sort=True)
+    table = table.loc[:, ~table.columns.duplicated(keep="last")]
+    return table.reindex(columns=pd.date_range(table.columns.min(), table.columns.max()))
 
 
 def _header_date(value) -> pd.Timestamp | None:

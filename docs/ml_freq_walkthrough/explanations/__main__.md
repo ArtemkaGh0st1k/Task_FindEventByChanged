@@ -5,7 +5,7 @@
 
 ### Пример
 ```bash
-.venv/Scripts/python -m gtm_detector.ml_freq audit                              # аудит данных 2021–2026
+.venv/Scripts/python -m gtm_detector.ml_freq audit                              # аудит данных 2020–2026
 .venv/Scripts/python -m gtm_detector.ml_freq compare --models gboost extra_trees # около 2 минут
 ```
 Обе команды запускают `main()` из `cli.py`; результаты попадают в `results/ml_freq/`.

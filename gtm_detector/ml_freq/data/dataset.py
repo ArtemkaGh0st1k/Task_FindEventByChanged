@@ -1,9 +1,11 @@
-"""Скважины из объединённых файлов 2021–2026 и разбор качества этих данных.
+"""Скважины из файлов статистики 2020–2026 и разбор качества этих данных.
 
 Порядок:
 
-1. статистика: только числовые ячейки (:class:`.MergedStatisticsReader`);
-2. сдвинутые блоки возвращаются на место или исключаются (:class:`.BlockShiftRepair`);
+1. статистика: только числовые ячейки — папка с полугодовыми файлами
+   (:class:`.HalfYearStatisticsReader`) или склеенный файл (:class:`.MergedStatisticsReader`);
+2. только для склеенного файла: сдвинутые блоки возвращаются на место или исключаются
+   (:class:`.BlockShiftRepair`); в исходных полугодовых файлах сдвигов нет;
 3. скважины без телеметрии частоты не используются: подъём F на них не увидеть;
 4. каждое мероприятие разметки проверяется по замерам; для обучения остаются
    те, где частота около даты начала действительно поднялась (:class:`.FrequencyCheck`).
@@ -27,7 +29,12 @@ import pandas as pd
 from .models import SERIES_COLUMNS, Interval, WellSeries
 from .readers import MeasurementsReader
 from .repair import BlockShiftRepair, FrequencyCheck, LabelPoint, Segment
-from .statistics import LabelRecord, MergedStatisticsReader, MonitoringLabelsReader
+from .statistics import (
+    HalfYearStatisticsReader,
+    LabelRecord,
+    MergedStatisticsReader,
+    MonitoringLabelsReader,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +55,12 @@ class DataAudit:
 
 
 class MergedWellRepository:
-    """Скважины с проверенной разметкой из объединённых файлов; результат кэшируется."""
+    """Скважины с проверенной разметкой; результат кэшируется.
 
-    VERSION = 1  # менять при изменении логики — сбрасывает кэш
+    ``statistics`` — папка с полугодовыми файлами или один склеенный файл.
+    """
+
+    VERSION = 2  # менять при изменении логики — сбрасывает кэш
     MIN_TELEMETRY_SHARE = 0.1  # доля дней с замерами, где частота > 10 Гц
     DATA_WINDOW = 14  # дней вокруг даты начала, где должны быть замеры
 
@@ -85,7 +95,12 @@ class MergedWellRepository:
         return result
 
     def _build(self) -> tuple[list[WellSeries], DataAudit]:
-        reader = MergedStatisticsReader(self.statistics)
+        glued = self.statistics.is_file()
+        reader = (
+            MergedStatisticsReader(self.statistics)
+            if glued
+            else HalfYearStatisticsReader(self.statistics)
+        )
         tables = reader.read()
         index = tables["frequency"].index
         for table in tables.values():
@@ -96,20 +111,15 @@ class MergedWellRepository:
 
         records = MonitoringLabelsReader(self.labels).read() if self.labels else []
         decisions, rows = self._prefilter(records, index)
-        points = [
-            LabelPoint(rows[i], dates.get_loc(pd.Timestamp(r.start)), r.current, r.new)
-            for i, r in enumerate(records)
-            if decisions[i] is None and pd.Timestamp(r.start) in dates
-        ]
-
-        reference, observed = self._reference(index, dates), tables["debit_liquid"].to_numpy()
-        segments = self.repair.segments(presence, dates)
-        self.repair.assess(segments, presence, tables["frequency"].to_numpy(), points, reference, observed)
-        repaired = self.repair.apply(tables, segments)
-        for segment in segments:
-            logger.info(
-                "Сегмент %s — %s: %s (%s)", segment.start, segment.end, segment.decision, segment.verdict
-            )
+        segments: list[Segment] = []
+        repaired = tables
+        if glued:
+            points = [
+                LabelPoint(rows[i], dates.get_loc(pd.Timestamp(r.start)), r.current, r.new)
+                for i, r in enumerate(records)
+                if decisions[i] is None and pd.Timestamp(r.start) in dates
+            ]
+            segments, repaired = self._repair(tables, presence, points, index, dates)
 
         frequency = repaired["frequency"].to_numpy()
         has_data = np.any([table.notna().to_numpy() for table in repaired.values()], axis=0)
@@ -139,6 +149,30 @@ class MergedWellRepository:
             sum(len(w.labels) for w in wells),
         )
         return wells, audit
+
+    def _repair(
+        self,
+        tables: dict[str, pd.DataFrame],
+        presence: np.ndarray,
+        points: Sequence[LabelPoint],
+        index: pd.MultiIndex,
+        dates: pd.DatetimeIndex,
+    ) -> tuple[list[Segment], dict[str, pd.DataFrame]]:
+        """Сдвинутые блоки склеенного файла: найти, оценить, вернуть на место или исключить."""
+        reference, observed = self._reference(index, dates), tables["debit_liquid"].to_numpy()
+        segments = self.repair.segments(presence, dates)
+        frequency = tables["frequency"].to_numpy()
+        self.repair.assess(segments, presence, frequency, points, reference, observed)
+        repaired = self.repair.apply(tables, segments)
+        for segment in segments:
+            logger.info(
+                "Сегмент %s — %s: %s (%s)",
+                segment.start,
+                segment.end,
+                segment.decision,
+                segment.verdict,
+            )
+        return segments, repaired
 
     @staticmethod
     def _prefilter(
@@ -288,7 +322,12 @@ class MergedWellRepository:
 
     def _fingerprint(self) -> str:
         parts = [f"v{self.VERSION}", repr(self.repair)]
-        for path in (self.statistics, self.labels, self.reference):
+        sources = (
+            HalfYearStatisticsReader(self.statistics).files()
+            if self.statistics.is_dir()
+            else [self.statistics]
+        )
+        for path in (*sources, self.labels, self.reference):
             if path is not None:
                 stat = path.stat()
                 parts.append(f"{path.resolve()}:{stat.st_size}:{stat.st_mtime_ns}")

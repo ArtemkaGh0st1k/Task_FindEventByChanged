@@ -14,15 +14,17 @@ RESOURCES = PROJECT_ROOT / "resources"
 class DataConfig:
     """Где лежат данные и куда писать результаты.
 
-    ``dataset="merged"`` — объединённые файлы 2021–2026 (по умолчанию),
-    ``dataset="test"`` — первые тестовые файлы из ``resources/test_datas``.
+    ``dataset="merged"`` — статистика 2020–2026 и разметка технологов (по умолчанию),
+    ``dataset="test"`` — первые тестовые файлы из ``resources/test_datas``, если они есть.
     """
 
     dataset: str = "merged"
-    statistics: Path = RESOURCES / "Статистика_с_2021_2026_в_одном_файле.xlsx"
-    labels: Path = RESOURCES / "Итоговый_файл_c_2021_2026.xlsx"  # «c» в имени — латинская
-    # Исходная выгрузка за 2026 г.: только для проверки сдвигов, в обучение не идёт.
-    reference: Path | None = RESOURCES / "test_datas" / "input_dataset.xlsx"
+    # Папка <год>/<файл>.xls: исходные выгрузки по полугодиям. Можно указать и один
+    # склеенный файл .xlsx: тогда сдвинутые блоки исправит BlockShiftRepair.
+    statistics: Path = RESOURCES / "statistics"
+    labels: Path = RESOURCES / "labeled_data.xlsx"
+    # Эталонная выгрузка для проверки сдвигов склеенного файла; для полугодий не нужна.
+    reference: Path | None = None
     measurements: Path = RESOURCES / "test_datas" / "input_dataset.xlsx"
     results: Path = RESOURCES / "test_datas" / "output_dataset.xlsm"
     output_dir: Path = PROJECT_ROOT / "results" / "ml_freq"

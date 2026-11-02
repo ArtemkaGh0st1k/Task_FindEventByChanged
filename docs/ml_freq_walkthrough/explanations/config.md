@@ -12,15 +12,15 @@ cfg.folds = 3   # FrozenInstanceError: настройки менять нель�
 ```
 Чтобы изменить значение, создают новый объект: `ExperimentConfig(folds=3)`.
 
-## DataConfig  [552bf13b]
+## DataConfig  [8610001c]
 Где лежат входные файлы и куда писать результаты. Поля — пути `pathlib.Path`:
 
 | Поле | Значение по умолчанию |
 |------|-----------------------|
-| `dataset` | `"merged"` (файлы 2021–2026) или `"test"` (тестовые файлы 2026 г.) |
-| `statistics` | `resources/Статистика_с_2021_2026_в_одном_файле.xlsx` |
-| `labels` | `resources/Итоговый_файл_c_2021_2026.xlsx` (буква «c» в имени латинская — имя копируют только отсюда) |
-| `reference` | `resources/test_datas/input_dataset.xlsx` — исходная выгрузка 2026 г., нужна только для проверки сдвигов блоков, в обучение не идёт |
+| `dataset` | `"merged"` (статистика 2020–2026, по умолчанию) или `"test"` (первые тестовые файлы 2026 г.; папки `resources/test_datas` в проекте больше нет) |
+| `statistics` | `resources/statistics` — папка `<год>/*.xls` с 14 полугодовыми выгрузками (20–26, 01.01.2020–02.11.2026). Можно указать и один склеенный `.xlsx`: тогда включается исправление сдвигов |
+| `labels` | `resources/labeled_data.xlsx` — разметка технологов, лист «Лист1», 786 строк |
+| `reference` | `None`: эталонная выгрузка нужна только для проверки сдвигов склеенного файла, у полугодовых файлов сдвига нет |
 | `measurements`, `results` | `input_dataset.xlsx` и `output_dataset.xlsm` для режима `"test"` |
 | `output_dir` | `results/ml_freq` |
 | `weights_dir` | `gtm_detector/ml_freq/weights` (файлы `.pt`) |
@@ -28,8 +28,9 @@ cfg.folds = 3   # FrozenInstanceError: настройки менять нель�
 ### Пример
 ```python
 cfg = DataConfig()
-cfg.statistics.exists()          # True, если лежит рядом с проектом
-DataConfig(dataset="test")       # режим тестовых файлов (без объединённой статистики)
+cfg.statistics.is_dir()          # True: resources/statistics с папками 20 … 26
+cfg.reference                    # None
+DataConfig(dataset="test")       # режим первых тестовых файлов (если они есть)
 ```
 
 ## DecoderConfig  [ab34b346]

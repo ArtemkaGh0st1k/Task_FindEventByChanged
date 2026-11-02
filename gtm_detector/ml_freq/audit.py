@@ -157,9 +157,12 @@ class DataAuditReport:
         segments = self.segments_table()
         labels, wells = a.labels, a.wells
         accepted = labels[labels["решение"] == ACCEPTED]
-        cells = {
-            d: segments.loc[segments["решение"] == d, "ячеек с данными"].sum() for d in segments["решение"]
-        }
+        cells = {}
+        if not segments.empty:
+            cells = {
+                d: segments.loc[segments["решение"] == d, "ячеек с данными"].sum()
+                for d in segments["решение"]
+            }
 
         lines = [
             "=" * 100,
@@ -174,12 +177,15 @@ class DataAuditReport:
             )
 
         lines += ["", "=" * 100, "2. Сегменты (след отдельных выгрузок) и решения", "=" * 100]
-        lines.append(
-            "   разметка «a/b» — подтверждено a мероприятий из b проверенных; "
-            "выгрузка «a/b» — совпало a скважин из b"
-        )
-        lines.append(_indent(segments.drop(columns=["ячеек с данными"]).to_string(index=False)))
-        lines.append("")
+        if segments.empty:
+            lines.append("   нет: статистика из исходных полугодовых файлов, исправлять нечего")
+        else:
+            lines.append(
+                "   разметка «a/b» — подтверждено a мероприятий из b проверенных; "
+                "выгрузка «a/b» — совпало a скважин из b"
+            )
+            lines.append(_indent(segments.drop(columns=["ячеек с данными"]).to_string(index=False)))
+            lines.append("")
         total = sum(cells.values())
         for decision, count in sorted(cells.items(), key=lambda item: -item[1]):
             lines.append(f"   {decision:<16} {count:>9,} ячеек ({count / total:.0%})".replace(",", " "))

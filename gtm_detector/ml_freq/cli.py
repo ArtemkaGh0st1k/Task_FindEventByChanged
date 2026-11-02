@@ -143,12 +143,12 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
             "--dataset",
             choices=("merged", "test"),
             default=defaults.dataset,
-            help="merged — объединённые файлы 2021–2026, test — первые тестовые (resources/test_datas)",
+            help="merged — статистика 2020–2026 и разметка, test — первые тестовые (resources/test_datas)",
         )
-        sub.add_argument("--statistics", type=Path, default=defaults.statistics, help="merged: статистика")
-        sub.add_argument("--labels", type=Path, default=defaults.labels, help="merged: итоговый файл")
+        sub.add_argument("--statistics", type=Path, default=defaults.statistics, help="merged: папка полугодий или склеенный файл")
+        sub.add_argument("--labels", type=Path, default=defaults.labels, help="merged: разметка технологов")
         sub.add_argument(
-            "--reference", type=Path, default=defaults.reference, help="merged: выгрузка для сверки сдвигов"
+            "--reference", type=Path, default=defaults.reference, help="merged: выгрузка для сверки склеенного файла"
         )
         sub.add_argument("--no-reference", action="store_true", help="merged: не сверять с выгрузкой")
         sub.add_argument("--measurements", type=Path, default=defaults.measurements, help="test: замеры")
