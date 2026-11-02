@@ -28,9 +28,13 @@ from .audit import run as run_audit
 from .config import DataConfig, ExperimentConfig, TrainingConfig
 from .data import MergedWellRepository, WellRepository
 from .evaluation import ComparisonReport, CrossValidator, SegmentDecoder
-from .models import TransformerSegmenter, load_model, model_registry
+from .models import TransformerSegmenter, WeightsArchive, load_model, model_registry
 
 logger = logging.getLogger(__package__)
+
+
+def _weights_archive(data: DataConfig) -> WeightsArchive:
+    return WeightsArchive(data.weights_archive, data.weights_dir)
 
 
 def _run_dir(base: Path) -> Path:
@@ -86,13 +90,22 @@ def run_train(args: argparse.Namespace) -> int:
     model.fit(wells)
     path = data.weights_dir / f"{model.name}{model.file_suffix}"
     model.save(path)
-    print(f"{model.title}: обучена на {len(wells)} скважинах -> {path}")
+    _weights_archive(data).add([path])
+    print(f"{model.title}: обучена на {len(wells)} скважинах -> {path}, {data.weights_archive}")
+    return 0
+
+
+def run_pack_weights(args: argparse.Namespace) -> int:
+    data = DataConfig()
+    names = _weights_archive(data).pack()
+    size = data.weights_archive.stat().st_size / 2**20
+    print(f"В архив {data.weights_archive} ({size:.1f} МБ) записаны: {', '.join(names)}")
     return 0
 
 
 def run_predict(args: argparse.Namespace) -> int:
     data = DataConfig()
-    path = args.weights or _find_weights(data.weights_dir, args.model)
+    path = args.weights or _weights_archive(data).locate(args.model)
     model = load_model(path)
     wells = load_wells(args, labeled=False)
     decoder = SegmentDecoder()
@@ -118,14 +131,6 @@ def run_predict(args: argparse.Namespace) -> int:
         f"{len({(r['скважина'], r['куст']) for r in rows})} скважинах -> {out}"
     )
     return 0
-
-
-def _find_weights(directory: Path, name: str) -> Path:
-    for suffix in (".pt", ".joblib"):
-        candidate = directory / f"{name}{suffix}"
-        if candidate.exists():
-            return candidate
-    raise FileNotFoundError(f"Нет весов модели {name} в {directory}: сначала выполните train")
 
 
 def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
@@ -175,9 +180,12 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     predict = commands.add_parser("predict", help="найти мероприятия обученной моделью")
     common(predict)
     predict.add_argument("--model", choices=names, default="transformer")
-    predict.add_argument("--weights", type=Path, help="файл весов (по умолчанию из ml_freq/weights)")
+    predict.add_argument("--weights", type=Path, help="файл весов (по умолчанию из архива weights.zip)")
     predict.add_argument("--out-dir", type=Path, help="папка результата")
     predict.set_defaults(handler=run_predict)
+
+    pack = commands.add_parser("pack-weights", help="записать все веса из weights/ в zip-архив")
+    pack.set_defaults(handler=run_pack_weights)
 
     audit = commands.add_parser("audit", help="отчёт о качестве объединённых данных 2021–2026")
     audit_arguments(audit, defaults)

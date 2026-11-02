@@ -14,8 +14,9 @@
 ```bash
 python -m gtm_detector.ml_freq compare                       # сравнить все модели (~15 мин на CPU)
 python -m gtm_detector.ml_freq compare --models gboost extra_trees   # только выбранные
-python -m gtm_detector.ml_freq train --model transformer     # обучить на всей разметке, сохранить веса
-python -m gtm_detector.ml_freq predict --model transformer   # найти мероприятия без разметки
+python -m gtm_detector.ml_freq train --model transformer     # обучить на всей разметке, сохранить веса и обновить weights.zip
+python -m gtm_detector.ml_freq predict --model transformer   # найти мероприятия без разметки (веса из архива)
+python -m gtm_detector.ml_freq pack-weights                  # записать все веса из weights/ в weights.zip
 python -m gtm_detector.ml_freq audit                         # отчёт о качестве данных 2020–2026
 python -m pytest gtm_detector/ml_freq/tests                  # тесты
 ```
@@ -91,15 +92,30 @@ python -m pytest gtm_detector/ml_freq/tests                  # тесты
 | Команда   | Что пишет                                                                    |
 |-----------|------------------------------------------------------------------------------|
 | `compare` | `results/ml_freq/<дата_время>/comparison.xlsx` (метрики + предсказания по каждой модели), `comparison.png` |
-| `train`   | `gtm_detector/ml_freq/weights/<модель>.pt` или `.joblib`                      |
+| `train`   | `gtm_detector/ml_freq/weights/<модель>.pt` или `.joblib` и обновлённый `weights/weights.zip` |
+| `pack-weights` | `weights/weights.zip` со всеми весами из `weights/`                      |
 | `predict` | `results/ml_freq/<дата_время>/events_<модель>.xlsx`                           |
 
 Модели: `transformer`, `logreg`, `random_forest`, `extra_trees`, `gboost`.
 
-> **Размер весов.** После переобучения на 369 скважинах `weights/extra_trees.joblib` весит
-> 178 МБ (больше лимита GitHub в 100 МБ), `random_forest.joblib` — 85 МБ (близко к лимиту),
-> `gboost.joblib` — 1,2 МБ, `transformer.pt` — 89 КБ, `logreg.joblib` — 4 КБ. Крупные
-> файлы в Git без Git LFS отправить не получится.
+### Веса и архив `weights.zip`
+
+`weights/extra_trees.joblib` весит 178 МБ, `random_forest.joblib` — 85 МБ, `gboost.joblib` —
+1,2 МБ, `transformer.pt` — 89 КБ, `logreg.joblib` — 4 КБ. GitHub предупреждает о файлах
+больше 50 МБ и отклоняет больше 100 МБ, поэтому в git кладётся только архив
+`weights/weights.zip` (79,4 МБ на все пять моделей; extra_trees сжимается 170 → 53 МБ,
+random_forest 81 → 26 МБ). Распакованные `*.joblib` и `*.pt` — рабочие копии, они в `.gitignore`.
+
+- `train` сохраняет веса и обновляет архив (остальные модели в нём остаются). Пересборка
+  архива занимает около 75 секунд (сжатие уровня 9), столько же добавляется к `train`.
+- `predict` без `--weights` берёт веса через `WeightsArchive.locate`: архив — главный
+  источник. Если рабочей копии нет (после `git clone`) или её размер/CRC32 отличаются
+  от архива (после `git pull` с новым архивом), распаковывается только запрошенная модель.
+  Модель, которой нет в архиве, берётся из рабочей копии.
+- `pack-weights` — вручную записать в архив всё, что лежит в `weights/`.
+
+> **Архив в git.** Каждый коммит нового `weights.zip` навсегда добавляет в историю
+> около 80 МБ. Коммитьте архив только после значимого переобучения, а не при каждом `train`.
 
 ## Постановка задачи
 
@@ -268,7 +284,7 @@ Transformer получает эти каналы как последовател
 
 ```
 gtm_detector/ml_freq/
-├── __main__.py, cli.py     python -m gtm_detector.ml_freq {compare,train,predict,audit}
+├── __main__.py, cli.py     python -m gtm_detector.ml_freq {compare,train,predict,pack-weights,audit}
 ├── audit.py                отчёт о качестве данных 2020–2026 (можно запускать отдельно)
 ├── config.py               DataConfig, DecoderConfig, TransformerConfig, TrainingConfig, ExperimentConfig
 ├── data/
@@ -279,6 +295,7 @@ gtm_detector/ml_freq/
 │   └── dataset.py          MergedWellRepository (+ кэш), DataAudit
 ├── features/builder.py     FeatureBuilder: sequence() для Transformer, tabular() для sklearn
 ├── models/
+│   ├── archive.py          WeightsArchive: zip-архив весов (add, pack, locate)
 │   ├── base.py             EventSegmenter — общий интерфейс: fit / predict_proba / save / load
 │   ├── transformer.py      TimeSeriesTransformer (nn.Module), TransformerSegmenter
 │   └── classic.py          SklearnSegmenter, classic_models()
@@ -287,8 +304,8 @@ gtm_detector/ml_freq/
 │   ├── metrics.py          EventMatcher, Score
 │   ├── experiment.py       CrossValidator, ModelResult
 │   └── report.py           ComparisonReport: comparison.xlsx + comparison.png
-├── tests/                  pytest на синтетических скважинах (test_statistics.py — чтение .xls)
-├── weights/                сохранённые модели (после train)
+├── tests/                  pytest на синтетических скважинах (test_statistics.py — чтение .xls, test_archive.py — архив весов)
+├── weights/                рабочие копии весов (в .gitignore) и weights.zip (в git)
 └── Построчный_разбор_ml_freq.pdf   разбор каждого класса, функции и метода с примерами
 ```
 

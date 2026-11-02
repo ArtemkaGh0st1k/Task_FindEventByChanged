@@ -1,13 +1,14 @@
-## @module  [07dbb2d5]
+## @module  [31bd9f8e]
 Командная строка пакета: `python -m gtm_detector.ml_freq <команда>`. Модуль только связывает готовые части — загрузку данных (`data`), модели (`models`), проверку и отчёт (`evaluation`), аудит (`audit`) — и не содержит собственных вычислений.
 
-Четыре команды:
+Пять команд:
 
 | Команда | Что делает | Что создаёт |
 |---------|-----------|-------------|
 | `compare` | перекрёстная проверка по скважинам, сравнение моделей | `comparison.xlsx`, `comparison.png` в `results/ml_freq/<дата_время>/` |
-| `train` | обучение одной модели на всей разметке | веса в `gtm_detector/ml_freq/weights/` (`.pt` или `.joblib`) |
+| `train` | обучение одной модели на всей разметке | веса в `gtm_detector/ml_freq/weights/` (`.pt` или `.joblib`) и обновлённый `weights/weights.zip` |
 | `predict` | поиск мероприятий обученной моделью (разметка не нужна) | `events_<модель>.xlsx` |
+| `pack-weights` | запись всех весов из `weights/` в архив | `weights/weights.zip` |
 | `audit` | отчёт о качестве данных | `data_audit.xlsx`, `training_data.xlsx` и др. |
 
 Примеры запуска из корня проекта:
@@ -18,6 +19,7 @@
 .venv/Scripts/python -m gtm_detector.ml_freq compare --models transformer --epochs 20 # быстрая проверка
 .venv/Scripts/python -m gtm_detector.ml_freq train --model gboost
 .venv/Scripts/python -m gtm_detector.ml_freq predict --model gboost
+.venv/Scripts/python -m gtm_detector.ml_freq pack-weights
 .venv/Scripts/python -m gtm_detector.ml_freq audit
 ```
 
@@ -65,17 +67,17 @@ _registry(args)["transformer"]()   # TransformerSegmenter, 2 эпохи
 .venv/Scripts/python -m gtm_detector.ml_freq compare --models gboost --out-dir results/ml_freq/debug/compare
 ```
 
-## run_train  [6c74f4e3]
+## run_train  [525d1dee]
 Команда `train`: обучает одну модель на **всех** размеченных скважинах (без отложенной выборки — для боевого использования) и сохраняет веса в `weights_dir / "<имя><суффикс>"`: `transformer.pt` у PyTorch-модели, `gboost.joblib` и т. п. у моделей scikit-learn. Печатает «Градиентный бустинг (HistGB): обучена на 369 скважинах -> …\weights\gboost.joblib». Параметр `--model` по умолчанию `transformer`; обучение Transformer на CPU долгое, поэтому запускайте в фоне. Размер весов: `extra_trees.joblib` 178 МБ, `random_forest.joblib` 85 МБ, остальные — килобайты и около 1 МБ.
 
-Команда перезаписывает существующие веса.
+После сохранения вызывает `WeightsArchive.add([path])`: файл попадает в `weights/weights.zip`, остальные модели в архиве сохраняются. Так сделано, потому что GitHub не принимает файлы больше 100 МБ, а в git лежит только архив. Пересборка архива занимает около 75 секунд — `train` любой модели стал дольше на столько же. Команда перезаписывает существующие веса и их запись в архиве.
 
 ```bash
 .venv/Scripts/python -m gtm_detector.ml_freq train --model gboost
 ```
 
-## run_predict  [11c583ca]
-Команда `predict`: загружает веса (`--weights` или найденные `_find_weights`), прогоняет модель по всем скважинам, декодирует вероятности тем же `SegmentDecoder`, что и при проверке, и пишет Excel `events_<модель>.xlsx` со столбцами «скважина», «куст», «начало эффекта», «окончание эффекта», «статус». Для интервала без окончания «статус» = «эффект продолжается».
+## run_predict  [de0a1ec0]
+Команда `predict`: загружает веса (`--weights` или `WeightsArchive.locate(args.model)`: при необходимости модель распаковывается из `weights.zip`), прогоняет модель по всем скважинам, декодирует вероятности тем же `SegmentDecoder`, что и при проверке, и пишет Excel `events_<модель>.xlsx` со столбцами «скважина», «куст», «начало эффекта», «окончание эффекта», «статус». Для интервала без окончания «статус» = «эффект продолжается».
 
 Результат `results/ml_freq/predict_gboost_merged/events_gboost.xlsx` (получен старыми весами, обученными на 122 скважинах склеенного файла): 770 мероприятий на 468 скважинах, из них 112 «эффект продолжается». Нашлось больше мероприятий, чем было размечено (135), потому что предсказания идут по всем скважинам, а не только по размеченным; технолог должен проверить найденное. С новыми весами результат будет другим.
 
@@ -83,15 +85,23 @@ _registry(args)["transformer"]()   # TransformerSegmenter, 2 эпохи
 .venv/Scripts/python -m gtm_detector.ml_freq predict --model gboost --out-dir results/ml_freq/debug/predict
 ```
 
-## _find_weights  [d01f5e82]
-Ищет в папке файл весов модели с именем `name`: сначала `<имя>.pt`, затем `<имя>.joblib`. Если ничего нет — `FileNotFoundError` с подсказкой «сначала выполните train». Папка `gtm_detector/ml_freq/weights` сейчас содержит `transformer.pt`, `gboost.joblib`, `logreg.joblib`, `random_forest.joblib`, `extra_trees.joblib`.
+## _weights_archive  [ee6dc8af]
+Собирает `WeightsArchive(data.weights_archive, data.weights_dir)` из настроек `DataConfig`: архив `weights/weights.zip` и папка рабочих копий `weights/`. Общий помощник для `run_train`, `run_pack_weights` и `run_predict`, чтобы пути не дублировались.
 
 ```python
-_find_weights(data.weights_dir, "gboost")   # …/weights/gboost.joblib
+_weights_archive(DataConfig()).path   # …/gtm_detector/ml_freq/weights/weights.zip
 ```
 
-## build_parser  [7325d69f]
-Строит парсер с подкомандами `compare`, `train`, `predict`, `audit`. Общий блок аргументов (`common`) для `compare`, `train`, `predict`: `--dataset {merged,test}`, `--statistics` (папка полугодовых файлов или склеенный файл), `--labels` (разметка технологов), `--reference` (эталон для склеенного файла, по умолчанию `None`), `--no-reference`, `--measurements`, `--results`, `--seed` (0), `--epochs`. Пути по умолчанию берутся из `DataConfig`: `resources/statistics` и `resources/labeled_data.xlsx`. Флаг `-v/--verbose` включает подробный лог. Для `audit` аргументы добавляет `audit.add_arguments`. Каждой подкоманде назначен `handler` (`run_compare`, `run_train`, `run_predict`, `run_audit`).
+## run_pack_weights  [383a04ff]
+Команда `pack-weights`: записывает в архив все `.pt` и `.joblib` из `weights/` (`WeightsArchive.pack`) и печатает имена и размер архива. Нужна, когда веса скопированы вручную или обучены до появления архива. Если в папке нет весов, выбрасывается `FileNotFoundError`. Возвращает 0.
+
+```bash
+.venv/Scripts/python -m gtm_detector.ml_freq pack-weights
+# В архив …\weights\weights.zip (79.4 МБ) записаны: extra_trees.joblib, gboost.joblib, logreg.joblib, random_forest.joblib, transformer.pt
+```
+
+## build_parser  [deefb4e2]
+Строит парсер с подкомандами `compare`, `train`, `predict`, `pack-weights`, `audit`. Общий блок аргументов (`common`) для `compare`, `train`, `predict`: `--dataset {merged,test}`, `--statistics` (папка полугодовых файлов или склеенный файл), `--labels` (разметка технологов), `--reference` (эталон для склеенного файла, по умолчанию `None`), `--no-reference`, `--measurements`, `--results`, `--seed` (0), `--epochs`. Пути по умолчанию берутся из `DataConfig`: `resources/statistics` и `resources/labeled_data.xlsx`. Флаг `-v/--verbose` включает подробный лог. Для `audit` аргументы добавляет `audit.add_arguments`. Каждой подкоманде назначен `handler` (`run_compare`, `run_train`, `run_predict`, `run_pack_weights`, `run_audit`). У `predict --weights` значения по умолчанию нет: веса берутся из архива `weights.zip`; у `pack-weights` аргументов нет.
 
 Доступные модели берутся из `model_registry()`; значит, новая модель, добавленная в реестр, сразу появляется в `--models` и `--model`.
 

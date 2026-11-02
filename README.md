@@ -42,7 +42,8 @@ scikit-learn (логистическая регрессия, случайный 
 ```bash
 python -m gtm_detector.ml_freq compare                      # сравнить все модели
 python -m gtm_detector.ml_freq train --model gboost         # обучить и сохранить
-python -m gtm_detector.ml_freq predict --model gboost       # найти мероприятия
+python -m gtm_detector.ml_freq predict --model gboost       # найти мероприятия (веса берутся из weights/weights.zip)
+python -m gtm_detector.ml_freq pack-weights                 # записать все веса в архив weights.zip
 python -m gtm_detector.ml_freq audit                        # отчёт о качестве данных 2020–2026
 ```
 

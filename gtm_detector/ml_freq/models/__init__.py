@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from .archive import WeightsArchive
 from .base import EventSegmenter
 from .classic import SklearnSegmenter, classic_models
 from .transformer import TimeSeriesTransformer, TransformerSegmenter
@@ -24,6 +25,7 @@ __all__ = [
     "SklearnSegmenter",
     "TimeSeriesTransformer",
     "TransformerSegmenter",
+    "WeightsArchive",
     "classic_models",
     "load_model",
     "model_registry",

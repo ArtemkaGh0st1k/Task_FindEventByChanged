@@ -218,3 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 resources/
+
+# Веса: в git только архив weights.zip, распакованные файлы — рабочие копии
+gtm_detector/ml_freq/weights/*.joblib
+gtm_detector/ml_freq/weights/*.pt

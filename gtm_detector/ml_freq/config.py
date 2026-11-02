@@ -29,6 +29,8 @@ class DataConfig:
     results: Path = RESOURCES / "test_datas" / "output_dataset.xlsm"
     output_dir: Path = PROJECT_ROOT / "results" / "ml_freq"
     weights_dir: Path = PACKAGE_DIR / "weights"
+    # В git лежит только архив: extra_trees.joblib не помещается в лимит GitHub на файл.
+    weights_archive: Path = PACKAGE_DIR / "weights" / "weights.zip"
 
 
 @dataclass(frozen=True)

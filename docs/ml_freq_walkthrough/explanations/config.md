@@ -12,7 +12,7 @@ cfg.folds = 3   # FrozenInstanceError: настройки менять нель�
 ```
 Чтобы изменить значение, создают новый объект: `ExperimentConfig(folds=3)`.
 
-## DataConfig  [8610001c]
+## DataConfig  [f74fbfc6]
 Где лежат входные файлы и куда писать результаты. Поля — пути `pathlib.Path`:
 
 | Поле | Значение по умолчанию |
@@ -23,13 +23,15 @@ cfg.folds = 3   # FrozenInstanceError: настройки менять нель�
 | `reference` | `None`: эталонная выгрузка нужна только для проверки сдвигов склеенного файла, у полугодовых файлов сдвига нет |
 | `measurements`, `results` | `input_dataset.xlsx` и `output_dataset.xlsm` для режима `"test"` |
 | `output_dir` | `results/ml_freq` |
-| `weights_dir` | `gtm_detector/ml_freq/weights` (файлы `.pt`) |
+| `weights_dir` | `gtm_detector/ml_freq/weights` (рабочие копии `.pt` и `.joblib`, в `.gitignore`) |
+| `weights_archive` | `gtm_detector/ml_freq/weights/weights.zip` — единственное, что лежит в git: `extra_trees.joblib` (178 МБ) не проходит лимит GitHub в 100 МБ на файл |
 
 ### Пример
 ```python
 cfg = DataConfig()
 cfg.statistics.is_dir()          # True: resources/statistics с папками 20 … 26
 cfg.reference                    # None
+cfg.weights_archive.name         # 'weights.zip'
 DataConfig(dataset="test")       # режим первых тестовых файлов (если они есть)
 ```
 

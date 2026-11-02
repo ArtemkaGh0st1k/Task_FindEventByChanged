@@ -1,9 +1,9 @@
-## @module  [355b6b72]
+## @module  [ca9ccf3a]
 Пакет `models` собирает все модели в одном месте и скрывает различия между ними: с точки зрения остального кода (`CrossValidator`, `cli`) любая модель — это `EventSegmenter` с методами `fit`, `predict_proba`, `save`, `load`.
 
 В цепочке «Excel → скважины → признаки → модель → интервалы» пакет — четвёртое звено: берёт признаки из `FeatureBuilder`, учится на днях из `training_mask`, возвращает вероятность «день внутри эффекта». Даты начала и окончания получает уже `SegmentDecoder`, одинаково для всех моделей.
 
-Пакет содержит: `base.py` (общий интерфейс), `classic.py` (4 модели scikit-learn), `transformer.py` (своя сеть на PyTorch). Новая модель — это наследник `EventSegmenter` и одна строка в `model_registry`.
+Пакет содержит: `base.py` (общий интерфейс), `classic.py` (4 модели scikit-learn), `transformer.py` (своя сеть на PyTorch), `archive.py` (`WeightsArchive` — zip-архив весов, который `cli` использует в `train`, `predict` и `pack-weights`; класс экспортируется из пакета). Новая модель — это наследник `EventSegmenter` и одна строка в `model_registry`.
 
 ## model_registry  [ac67e9a3]
 Возвращает словарь «имя модели → фабрика необученной модели». Имена — те, что принимает `--models` в командной строке.
@@ -22,7 +22,7 @@ model.title                      # 'Градиентный бустинг (HistG
 В командной строке: `python -m gtm_detector.ml_freq compare --models gboost extra_trees`.
 
 ## load_model  [31efa844]
-Загружает сохранённую модель, определяя тип по расширению файла: `.pt` — `TransformerSegmenter.load`, всё остальное (`.joblib`) — `SklearnSegmenter.load`. Нужна команде `predict`, которой всё равно, какая модель лежит в `weights/`.
+Загружает сохранённую модель, определяя тип по расширению файла: `.pt` — `TransformerSegmenter.load`, всё остальное (`.joblib`) — `SklearnSegmenter.load`. Нужна команде `predict`, которой всё равно, какая модель лежит в `weights/`; путь к файлу ей даёт `WeightsArchive.locate`.
 
 Параметр `path` — путь к файлу (`str` или `Path`). Результат — обученная модель, готовая к `predict_proba`.
 
