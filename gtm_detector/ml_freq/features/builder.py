@@ -25,7 +25,9 @@ class FeatureBuilder:
     WINDOW = 30  # дней: «недавний» уровень параметров
     # Окончание эффекта: технолог ставит его, когда дебит нефти вернулся к уровню до подъёма.
     # База — медиана за BASE_DAYS дней до скачка и сам день скачка: дебит одного дня
-    # шумный, и «первый день не выше» срабатывает почти сразу (проверено на разметке).
+    # шумный, и «первый день не выше» срабатывает почти сразу (проверено на разметке:
+    # 70 % против 27 % у дебита одного дня, ±7 дней). Те же признаки по дебиту жидкости
+    # проверены на compare и убраны: устойчивого выигрыша они не дали.
     BASE_DAYS = 3
     BELOW_RUN_CAP = 14  # дней подряд ниже базы, при которых признак «насыщается»
 
@@ -166,38 +168,38 @@ class FeatureBuilder:
             result["liq_vs_step"][span] = _ratio(liquid[span], liquid[before])
             result["oil_vs_step"][span] = _ratio(oil[span], oil[before])
             result["wc_vs_step"][span] = (watercut[span] - watercut[before]) / 10
-            base = self._oil_base(oil, step)
+            base = self._base_level(oil, step)
             if base is not None:
-                for name, feature in self._oil_end_features(oil[span], base).items():
-                    result[name][span] = feature
+                for name, feature in self._return_features(oil[span], base).items():
+                    result[f"oil_{name}"][span] = feature
         return pd.DataFrame(result, index=frame.index)
 
-    def _oil_base(self, oil: np.ndarray, step: int) -> float | None:
-        """Уровень нефти до подъёма: медиана последних дней перед скачком; ``None`` — нет базы."""
-        window = oil[max(step - self.BASE_DAYS, 0) : step + 1]
+    def _base_level(self, debit: np.ndarray, step: int) -> float | None:
+        """Уровень дебита до подъёма: медиана последних дней перед скачком; ``None`` — нет базы."""
+        window = debit[max(step - self.BASE_DAYS, 0) : step + 1]
         window = window[np.isfinite(window)]
         base = float(np.median(window)) if len(window) else 0.0
         return base if base > 0 else None
 
-    def _oil_end_features(self, oil: np.ndarray, base: float) -> dict[str, np.ndarray]:
-        """Нефть после скачка относительно базы: вернулась ли она к уровню до подъёма.
+    def _return_features(self, debit: np.ndarray, base: float) -> dict[str, np.ndarray]:
+        """Дебит после скачка относительно базы: вернулся ли он к уровню до подъёма.
 
         День без замера не даёт сведений: отношение 0, он не считается «ниже базы» и
         обрывает серию дней подряд.
         """
-        valid = np.isfinite(oil)
-        below = valid & (oil <= base)
-        run, count = np.zeros(len(oil)), 0
+        valid = np.isfinite(debit)
+        below = valid & (debit <= base)
+        run, count = np.zeros(len(debit)), 0
         for i, flag in enumerate(below):
             count = count + 1 if flag else 0
             run[i] = min(count, self.BELOW_RUN_CAP) / self.BELOW_RUN_CAP
-        peak = np.maximum.accumulate(np.where(valid, oil, -np.inf))
+        peak = np.maximum.accumulate(np.where(valid, debit, -np.inf))
         has_peak = valid & np.isfinite(peak)
         return {
-            "oil_vs_base": np.where(valid, oil / base - 1, 0.0),
-            "oil_below_base": below.astype(float),
-            "oil_days_below": run,
-            "oil_drawdown": np.where(has_peak, (peak - oil) / base, 0.0),
+            "vs_base": np.where(valid, debit / base - 1, 0.0),
+            "below_base": below.astype(float),
+            "days_below": run,
+            "drawdown": np.where(has_peak, (peak - debit) / base, 0.0),
         }
 
 
