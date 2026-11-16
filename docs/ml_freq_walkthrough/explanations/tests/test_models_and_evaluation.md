@@ -1,4 +1,4 @@
-## @module  [66de6c7b]
+## @module  [3bdb20a7]
 Тесты второй половины цепочки: «вероятности по дням → интервалы → сравнение с разметкой» и сами модели. Проверяются `SegmentDecoder`, `EventMatcher`, Transformer, scikit-learn-модель и `CrossValidator`. Обучение идёт на восьми синтетических скважинах `wells` (см. `conftest.py`); Transformer берётся уменьшенный (`SMALL`: `d_model=16`, 2 головы, 1 слой, `dim_feedforward=32`) и учится 3 эпохи по окнам в 64 дня (`QUICK`) — так тест укладывается в секунды, но проверяет все шаги: обучение, предсказание, сохранение, загрузку.
 
 Тесты проверяют **механику**, а не качество: настоящие цифры даёт команда `compare`. Запуск файла целиком:
@@ -66,6 +66,19 @@
 
 ```bash
 .venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_models_and_evaluation.py::test_sklearn_models_learn_the_effect -q
+```
+
+## test_cross_validation_scores_only_test_wells_with_labels  [45ad0f8d]
+**Что проверяет.** Параметр `test_wells` у `CrossValidator.run`: проверочная разметка отделена от обучающей, скважины без неё в оценку не входят.
+
+**Данные.** `wells` (8 скважин), `ExperimentConfig(folds=2)`, модель `logreg`. В `test_wells` у нечётных скважин `labels=[]` (через `dataclasses.replace`).
+
+**Проверки:** `TP + FN == len(wells) // 2` = 4 — оценены только скважины с проверочной разметкой; список `test_wells` короче `wells` даёт `ValueError`.
+
+**Какую ошибку поймал бы.** Учёт скважин без проверочной разметки как «пропущенных мероприятий» (занижение полноты) или молчаливое рассогласование скважин и проверочных скважин.
+
+```bash
+.venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_models_and_evaluation.py::test_cross_validation_scores_only_test_wells_with_labels -q
 ```
 
 ## test_cross_validation_runs_for_all_models  [72650192]

@@ -52,10 +52,24 @@ class CrossValidator:
         return [part.tolist() for part in np.array_split(order, self.config.folds)]
 
     def run(
-        self, wells: Sequence[WellSeries], models: Mapping[str, Callable[[], EventSegmenter]]
+        self,
+        wells: Sequence[WellSeries],
+        models: Mapping[str, Callable[[], EventSegmenter]],
+        test_wells: Sequence[WellSeries] | None = None,
     ) -> list[ModelResult]:
+        """``test_wells`` — те же скважины в том же порядке, но с другой разметкой для проверки.
+
+        Нужен, чтобы сравнить разные способы отбора обучающей разметки на одних и тех же
+        фолдах и тех же проверочных мероприятиях. Скважины без проверочной разметки
+        в оценку не входят.
+        """
+        if test_wells is not None and len(test_wells) != len(wells):
+            raise ValueError("test_wells должны соответствовать wells один к одному")
         folds = self.folds(wells)
-        return [self._evaluate(name, factory, wells, folds) for name, factory in models.items()]
+        return [
+            self._evaluate(name, factory, wells, folds, test_wells or wells)
+            for name, factory in models.items()
+        ]
 
     def _evaluate(
         self,
@@ -63,6 +77,7 @@ class CrossValidator:
         factory: Callable[[], EventSegmenter],
         wells: Sequence[WellSeries],
         folds: list[list[int]],
+        test_wells: Sequence[WellSeries],
     ) -> ModelResult:
         result: ModelResult | None = None
         targets, probas = [], []
@@ -77,7 +92,9 @@ class CrossValidator:
             result.train_seconds += time.perf_counter() - started
 
             for i in test_idx:
-                well = wells[i]
+                well = test_wells[i]
+                if not well.labels:
+                    continue
                 proba = model.predict_proba(well)
                 targets.append(well.target())
                 probas.append(proba)

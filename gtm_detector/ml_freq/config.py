@@ -25,6 +25,14 @@ class DataConfig:
     labels: Path = RESOURCES / "labeled_data.xlsx"
     # Эталонная выгрузка для проверки сдвигов склеенного файла; для полугодий не нужна.
     reference: Path | None = None
+    # Окно поиска подъёма частоты вокруг даты технолога при отборе мероприятий, дней.
+    # Умолчание 3/3 — прежнее поведение. Контроль на случайных датах показал, что подъём
+    # заметно чаще лежит раньше даты (до ~14 дней), чем позже; шире — в основном шум.
+    label_lookback: int = 3
+    label_lookahead: int = 3
+    # Расширенное окно для команды compare-windows: 14 дней раньше и 3 позже даты технолога.
+    wide_lookback: int = 14
+    wide_lookahead: int = 3
     measurements: Path = RESOURCES / "test_datas" / "input_dataset.xlsx"
     results: Path = RESOURCES / "test_datas" / "output_dataset.xlsm"
     output_dir: Path = PROJECT_ROOT / "results" / "ml_freq"

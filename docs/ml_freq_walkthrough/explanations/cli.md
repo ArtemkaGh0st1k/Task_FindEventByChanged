@@ -1,11 +1,12 @@
-## @module  [31bd9f8e]
+## @module  [2315ddd0]
 Командная строка пакета: `python -m gtm_detector.ml_freq <команда>`. Модуль только связывает готовые части — загрузку данных (`data`), модели (`models`), проверку и отчёт (`evaluation`), аудит (`audit`) — и не содержит собственных вычислений.
 
-Пять команд:
+Шесть команд:
 
 | Команда | Что делает | Что создаёт |
 |---------|-----------|-------------|
 | `compare` | перекрёстная проверка по скважинам, сравнение моделей | `comparison.xlsx`, `comparison.png` в `results/ml_freq/<дата_время>/` |
+| `compare-windows` | обучение на разметке с узким и широким окном отбора, проверка на одних мероприятиях | `windows.xlsx` (листы «по зёрнам», «среднее», «разница») |
 | `train` | обучение одной модели на всей разметке | веса в `gtm_detector/ml_freq/weights/` (`.pt` или `.joblib`) и обновлённый `weights/weights.zip` |
 | `predict` | поиск мероприятий обученной моделью (разметка не нужна) | `events_<модель>.xlsx` |
 | `pack-weights` | запись всех весов из `weights/` в архив | `weights/weights.zip` |
@@ -17,6 +18,7 @@
 .venv/Scripts/python -m gtm_detector.ml_freq compare --models gboost extra_trees      # около 2 минут
 .venv/Scripts/python -m gtm_detector.ml_freq compare                                  # все модели, около 15 минут
 .venv/Scripts/python -m gtm_detector.ml_freq compare --models transformer --epochs 20 # быстрая проверка
+.venv/Scripts/python -m gtm_detector.ml_freq compare-windows --models gboost --seeds 0 1 2
 .venv/Scripts/python -m gtm_detector.ml_freq train --model gboost
 .venv/Scripts/python -m gtm_detector.ml_freq predict --model gboost
 .venv/Scripts/python -m gtm_detector.ml_freq pack-weights
@@ -42,8 +44,15 @@ args.epochs = 2
 _registry(args)["transformer"]()   # TransformerSegmenter, 2 эпохи
 ```
 
-## load_wells  [a5f4390d]
-Загружает скважины по выбранному набору данных. Принимает `args` и `labeled`:
+## _all_wells  [bc58ee5f]
+Загружает все пригодные скважины набора с окном отбора разметки `lookback`/`lookahead` дней (до и после даты технолога). Для `merged` собирает `BlockShiftRepair(check=FrequencyCheck(lookback, lookahead))` и передаёт его в `MergedWellRepository`; для `test` окно не применяется. Скважины без разметки не отбрасывает — это делают `load_wells` и `run_compare_windows`.
+
+```python
+_all_wells(args, 14, 3)   # разметка отобрана с окном «14 дней до, 3 после»
+```
+
+## load_wells  [95560680]
+Загружает скважины по выбранному набору данных (через `_all_wells` с окном `--label-lookback`/`--label-lookahead`, по умолчанию 3/3). Принимает `args` и `labeled`:
 
 - `--dataset merged` (по умолчанию): `MergedWellRepository(statistics, labels, reference).load()` — статистика 2020–2026: папка полугодовых `.xls` (по умолчанию) или один склеенный файл (тогда исправляются сдвиги на 180 дней); `--no-reference` отключает сверку склеенного файла с эталонной выгрузкой;
 - `--dataset test`: `WellRepository(measurements, results)` — первые тестовые файлы (`resources/test_datas`, в проекте этой папки больше нет); разметка читается, только если `labeled=True`.
@@ -65,6 +74,27 @@ _registry(args)["transformer"]()   # TransformerSegmenter, 2 эпохи
 
 ```bash
 .venv/Scripts/python -m gtm_detector.ml_freq compare --models gboost --out-dir results/ml_freq/debug/compare
+```
+
+## _event_count  [4682b731]
+Число размеченных мероприятий во всех скважинах списка: `sum(len(well.labels))`. Используется в сводке `compare-windows`.
+
+```python
+_event_count(narrow)   # 424 при окне 3/3
+```
+
+## run_compare_windows  [9e3296c0]
+Команда `compare-windows`: проверяет, помогает ли обучению более широкое окно отбора разметки (подъём до 14 дней раньше даты технолога). Порядок:
+
+1. Загружает скважины дважды: с узким окном (`DataConfig.label_lookback/lookahead`, 3/3) и с широким (`--label-lookback/--label-lookahead`, у этой команды по умолчанию 14/3). Остаются скважины, размеченные при широком окне; списки должны совпасть по `well_id`, иначе код 1.
+2. Печатает сводку: число скважин и мероприятий в каждом варианте.
+3. Для каждого зерна из `--seeds` (или `--seed`) и каждой модели из `--models` запускает `CrossValidator.run` дважды: обучение на узкой разметке и на широкой, **проверка в обоих случаях на мероприятиях узкого окна** (`test_wells=narrow`). Фолды общие, поэтому разница метрик — эффект обучающей разметки, а не состава теста.
+4. Пишет `windows.xlsx`: «по зёрнам», «среднее» по зёрнам, «разница» (широкое − узкое: среднее и std по зёрнам). Метрики: найдено, точность, начало ±1/±3, конец ±3/±7, ROC-AUC по дням.
+
+Работает только с `--dataset merged`. Разброс между зёрнами сравним с эффектом, поэтому для вывода нужно несколько зёрен.
+
+```bash
+.venv/Scripts/python -m gtm_detector.ml_freq compare-windows --models gboost --seeds 0 1 2 --out-dir results/ml_freq/debug/windows
 ```
 
 ## run_train  [525d1dee]
@@ -102,8 +132,8 @@ _weights_archive(DataConfig()).path   # …/gtm_detector/ml_freq/weights/weights
 # В архив …\weights\weights.zip (79.4 МБ) записаны: extra_trees.joblib, gboost.joblib, logreg.joblib, random_forest.joblib, transformer.pt
 ```
 
-## build_parser  [deefb4e2]
-Строит парсер с подкомандами `compare`, `train`, `predict`, `pack-weights`, `audit`. Общий блок аргументов (`common`) для `compare`, `train`, `predict`: `--dataset {merged,test}`, `--statistics` (папка полугодовых файлов или склеенный файл), `--labels` (разметка технологов), `--reference` (эталон для склеенного файла, по умолчанию `None`), `--no-reference`, `--measurements`, `--results`, `--seed` (0), `--epochs`. Пути по умолчанию берутся из `DataConfig`: `resources/statistics` и `resources/labeled_data.xlsx`. Флаг `-v/--verbose` включает подробный лог. Для `audit` аргументы добавляет `audit.add_arguments`. Каждой подкоманде назначен `handler` (`run_compare`, `run_train`, `run_predict`, `run_pack_weights`, `run_audit`). У `predict --weights` значения по умолчанию нет: веса берутся из архива `weights.zip`; у `pack-weights` аргументов нет.
+## build_parser  [ce9fd134]
+Строит парсер с подкомандами `compare`, `compare-windows`, `train`, `predict`, `pack-weights`, `audit`. Общий блок аргументов (`common`) для `compare`, `compare-windows`, `train`, `predict`: `--dataset {merged,test}`, `--statistics` (папка полугодовых файлов или склеенный файл), `--labels` (разметка технологов), `--reference` (эталон для склеенного файла, по умолчанию `None`), `--no-reference`, `--measurements`, `--results`, `--label-lookback` и `--label-lookahead` (окно отбора разметки, по умолчанию 3 и 3; у `compare-windows` по умолчанию 14 и 3), `--seed` (0), `--epochs`. У `compare-windows` есть ещё `--models`, `--folds` (5), `--seeds`, `--out-dir`. Пути по умолчанию берутся из `DataConfig`: `resources/statistics` и `resources/labeled_data.xlsx`. Флаг `-v/--verbose` включает подробный лог. Для `audit` аргументы добавляет `audit.add_arguments`. Каждой подкоманде назначен `handler` (`run_compare`, `run_compare_windows`, `run_train`, `run_predict`, `run_pack_weights`, `run_audit`). У `predict --weights` значения по умолчанию нет: веса берутся из архива `weights.zip`; у `pack-weights` аргументов нет.
 
 Доступные модели берутся из `model_registry()`; значит, новая модель, добавленная в реестр, сразу появляется в `--models` и `--model`.
 

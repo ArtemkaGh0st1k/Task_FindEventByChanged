@@ -1,4 +1,7 @@
+from dataclasses import replace
+
 import numpy as np
+import pytest
 import torch
 
 from gtm_detector.ml_freq.config import DecoderConfig, ExperimentConfig, TrainingConfig, TransformerConfig
@@ -58,6 +61,18 @@ def test_sklearn_models_learn_the_effect(tmp_path, wells):
     path = tmp_path / "gboost.joblib"
     model.save(path)
     assert isinstance(load_model(path), SklearnSegmenter)
+
+
+def test_cross_validation_scores_only_test_wells_with_labels(wells):
+    """Проверочная разметка отделена от обучающей; скважины без неё в оценку не входят."""
+    test_wells = [well if i % 2 == 0 else replace(well, labels=[]) for i, well in enumerate(wells)]
+    results = CrossValidator(ExperimentConfig(folds=2)).run(
+        wells, {"logreg": classic_models()["logreg"]}, test_wells=test_wells
+    )
+    score = results[0].score
+    assert score.true_positives + score.false_negatives == len(wells) // 2
+    with pytest.raises(ValueError):
+        CrossValidator(ExperimentConfig(folds=2)).run(wells, {}, test_wells=test_wells[:-1])
 
 
 def test_cross_validation_runs_for_all_models(wells):

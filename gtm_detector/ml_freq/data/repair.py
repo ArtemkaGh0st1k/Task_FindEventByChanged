@@ -39,22 +39,32 @@ class FrequencyCheck:
       бывает смещена относительно уставки технолога на несколько Гц, прирост — нет.
 
     Частоту часто поднимают ступенями за 1–2 недели, поэтому годится любое из двух.
+
+    Окно поиска скачка несимметрично: по отброшенным мероприятиям подъём чаще лежит
+    раньше даты технолога, чем позже (см. ``lookback`` и ``lookahead``).
     """
 
     WINDOW = 7  # дней до и после скачка
-    TOLERANCE = 3  # дней: скачок может быть чуть раньше или позже даты технолога
+    TOLERANCE = 3  # дней: окно по умолчанию, скачок чуть раньше или позже даты технолога
     MIN_RISE = 0.3  # Гц
     LEVEL_TOLERANCE = 1.5  # Гц (или 3 % от «Нового значения», если больше)
     MIN_PLANNED_SHARE = 0.5
     MIN_WORKING = 10.0  # Гц: меньше — насос стоит или нет телеметрии
     MIN_VALUES = 3
 
+    def __init__(self, lookback: int = TOLERANCE, lookahead: int = TOLERANCE) -> None:
+        """``lookback`` дней до даты технолога и ``lookahead`` после неё, где ищется скачок."""
+        if lookback < 0 or lookahead < 0:
+            raise ValueError("Окно поиска скачка не может быть отрицательным")
+        self.lookback = lookback
+        self.lookahead = lookahead
+
     def confirms(self, frequency: np.ndarray, i: int, current: float, new: float) -> bool | None:
         """``True``/``False`` — подтверждён/нет; ``None`` — около дня ``i`` нет замеров."""
         planned = new - current if np.isfinite(new - current) else np.inf
         tolerance = max(self.LEVEL_TOLERANCE, 0.03 * new)
         tested = False
-        for t in range(i - self.TOLERANCE, i + self.TOLERANCE + 1):
+        for t in range(i - self.lookback, i + self.lookahead + 1):
             before = self._working(frequency[max(t - self.WINDOW, 0) : max(t, 0)])
             after = self._working(frequency[max(t, 0) : max(t + self.WINDOW, 0)])
             if len(before) < self.MIN_VALUES or len(after) < self.MIN_VALUES:
@@ -149,6 +159,7 @@ class BlockShiftRepair:
     def __repr__(self) -> str:  # входит в ключ кэша
         params = {k: v for k, v in vars(self).items() if k != "check"}
         check = {k: v for k, v in vars(type(self.check)).items() if k.isupper()}
+        check.update(vars(self.check))  # окно поиска скачка тоже меняет разметку -> другой кэш
         return f"BlockShiftRepair({params}, check={check})"
 
     def segments(self, presence: np.ndarray, dates: pd.DatetimeIndex) -> list[Segment]:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from gtm_detector.ml_freq.data import BlockShiftRepair, FrequencyCheck, Interval
 from gtm_detector.ml_freq.data.repair import LabelPoint
@@ -23,6 +24,22 @@ def test_frequency_check():
     assert not check.confirms(series, 20, 48.0, 56.0)  # прирост 2 из запланированных 8 Гц
     assert not check.confirms(np.full(40, 48.0), 20, 48.0, 50.0)
     assert check.confirms(np.full(40, np.nan), 20, 48.0, 50.0) is None
+
+
+def test_frequency_check_asymmetric_window():
+    series = np.r_[np.full(20, 48.0), np.full(20, 50.0)]  # скачок в день 20
+    assert not FrequencyCheck().confirms(series, 30, 48.0, 50.0)  # скачок на 10 дней раньше даты
+    wide = FrequencyCheck(lookback=14, lookahead=3)
+    assert wide.confirms(series, 30, 48.0, 50.0)
+    assert not wide.confirms(series, 12, 48.0, 50.0)  # скачок на 8 дней позже даты
+    with pytest.raises(ValueError):
+        FrequencyCheck(lookback=-1)
+
+
+def test_check_window_changes_cache_key():
+    narrow = repr(BlockShiftRepair())
+    assert repr(BlockShiftRepair(check=FrequencyCheck())) == narrow
+    assert repr(BlockShiftRepair(check=FrequencyCheck(14, 3))) != narrow
 
 
 def _shifted_block() -> tuple[np.ndarray, np.ndarray, list[LabelPoint], pd.DatetimeIndex]:

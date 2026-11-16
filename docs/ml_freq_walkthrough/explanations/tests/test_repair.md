@@ -1,4 +1,4 @@
-## @module  [4996fec6]
+## @module  [410fb1b4]
 Тесты `data/repair.py`: проверка разметки по частоте (`FrequencyCheck`) и исправление сдвинутых блоков (`BlockShiftRepair`). Это самое хрупкое место данных: прежняя склеенная статистика 2021–2026 была склеена макросом, и часть выгрузок записана на 180 дней позже. В тестах сдвиг короче — `SHIFT = 30` дней, чтобы всё помещалось в ряд из 120 дней; логика та же, поэтому `BlockShiftRepair` создаётся как `BlockShiftRepair(shifts=(0, SHIFT))`.
 
 Общая синтетическая картина (`_shifted_block`): шесть скважин, блок данных на 60 дней записан на 30 дней позже, чем надо. Запуск файла:
@@ -25,6 +25,33 @@
 
 ```bash
 .venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_repair.py::test_frequency_check -q
+```
+
+## test_frequency_check_asymmetric_window  [159e818a]
+**Что проверяет.** Несимметричное окно поиска скачка в `FrequencyCheck(lookback, lookahead)`.
+
+**Данные.** 20 дней по 48 Гц, затем 20 дней по 50 Гц (скачок в день 20).
+
+| Вызов | Ответ | Почему |
+|-------|-------|--------|
+| `FrequencyCheck().confirms(series, 30, 48, 50)` | `False` | скачок на 10 дней раньше даты, окно по умолчанию ±3 не достаёт |
+| `FrequencyCheck(14, 3).confirms(series, 30, 48, 50)` | `True` | `lookback = 14` покрывает 10 дней |
+| `FrequencyCheck(14, 3).confirms(series, 12, 48, 50)` | `False` | скачок на 8 дней **позже** даты, `lookahead = 3` не достаёт |
+| `FrequencyCheck(lookback=-1)` | `ValueError` | отрицательное окно недопустимо |
+
+**Какую ошибку поймал бы.** Перепутанные направления окна (до/после) или потерю умолчания 3/3.
+
+```bash
+.venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_repair.py::test_frequency_check_asymmetric_window -q
+```
+
+## test_check_window_changes_cache_key  [f1fe4a0e]
+**Что проверяет.** Что окно поиска скачка входит в `repr(BlockShiftRepair)`, то есть в ключ кэша данных: `BlockShiftRepair(check=FrequencyCheck())` даёт ту же строку, что `BlockShiftRepair()`, а `FrequencyCheck(14, 3)` — другую.
+
+**Какую ошибку поймал бы.** Ситуацию, когда после смены окна `MergedWellRepository` отдаёт старую разметку из кэша `%TEMP%/gtm_ml_freq_cache`, и `compare-windows` сравнивает два одинаковых набора.
+
+```bash
+.venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_repair.py::test_check_window_changes_cache_key -q
 ```
 
 ## _shifted_block  [aed2228b]

@@ -12,7 +12,7 @@ cfg.folds = 3   # FrozenInstanceError: настройки менять нель�
 ```
 Чтобы изменить значение, создают новый объект: `ExperimentConfig(folds=3)`.
 
-## DataConfig  [f74fbfc6]
+## DataConfig  [66d83b1f]
 Где лежат входные файлы и куда писать результаты. Поля — пути `pathlib.Path`:
 
 | Поле | Значение по умолчанию |
@@ -21,6 +21,8 @@ cfg.folds = 3   # FrozenInstanceError: настройки менять нель�
 | `statistics` | `resources/statistics` — папка `<год>/*.xls` с 14 полугодовыми выгрузками (20–26, 01.01.2020–02.11.2026). Можно указать и один склеенный `.xlsx`: тогда включается исправление сдвигов |
 | `labels` | `resources/labeled_data.xlsx` — разметка технологов, лист «Лист1», 786 строк |
 | `reference` | `None`: эталонная выгрузка нужна только для проверки сдвигов склеенного файла, у полугодовых файлов сдвига нет |
+| `label_lookback`, `label_lookahead` | 3 и 3 дня: окно вокруг даты технолога, где `FrequencyCheck` ищет подъём частоты при отборе разметки (прежнее поведение) |
+| `wide_lookback`, `wide_lookahead` | 14 и 3 дня: широкое окно для эксперимента `compare-windows`; подъём чаще лежит раньше даты технолога (до ~14 дней), чем позже |
 | `measurements`, `results` | `input_dataset.xlsx` и `output_dataset.xlsm` для режима `"test"` |
 | `output_dir` | `results/ml_freq` |
 | `weights_dir` | `gtm_detector/ml_freq/weights` (рабочие копии `.pt` и `.joblib`, в `.gitignore`) |
@@ -32,6 +34,7 @@ cfg = DataConfig()
 cfg.statistics.is_dir()          # True: resources/statistics с папками 20 … 26
 cfg.reference                    # None
 cfg.weights_archive.name         # 'weights.zip'
+cfg.label_lookback, cfg.wide_lookback   # (3, 14)
 DataConfig(dataset="test")       # режим первых тестовых файлов (если они есть)
 ```
 

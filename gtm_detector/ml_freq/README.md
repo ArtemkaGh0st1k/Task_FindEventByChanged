@@ -14,6 +14,7 @@
 ```bash
 python -m gtm_detector.ml_freq compare                       # сравнить все модели (~15 мин на CPU)
 python -m gtm_detector.ml_freq compare --models gboost extra_trees   # только выбранные
+python -m gtm_detector.ml_freq compare-windows --models gboost --seeds 0 1 2   # узкое и широкое окно отбора разметки
 python -m gtm_detector.ml_freq train --model transformer     # обучить на всей разметке, сохранить веса и обновить weights.zip
 python -m gtm_detector.ml_freq predict --model transformer   # найти мероприятия без разметки (веса из архива)
 python -m gtm_detector.ml_freq pack-weights                  # записать все веса из weights/ в weights.zip
@@ -83,6 +84,18 @@ python -m pytest gtm_detector/ml_freq/tests                  # тесты
 ослабить его значит учить модель на днях, где частота ещё не менялась. Если эти строки
 проверят технологи (`rejected_labels.csv`), каждая исправленная дата — новый пример.
 
+**Окно отбора настраивается.** `FrequencyCheck(lookback, lookahead)` ищет скачок в днях
+`[i − lookback, i + lookahead]` вокруг даты технолога; по умолчанию 3 и 3 (результаты выше
+получены с ним). Параметры `--label-lookback` и `--label-lookahead` (`DataConfig.label_lookback`,
+`label_lookahead`) меняют окно для `compare`, `train`, `predict`; окно входит в ключ кэша
+данных, поэтому при его смене Excel перечитывается. Команда `compare-windows` проверяет,
+помогает ли обучению широкое окно (`DataConfig.wide_lookback = 14`, `wide_lookahead = 3`):
+модели учатся на узкой и на широкой разметке, а проверяются на одних и тех же
+мероприятиях узкого окна (`CrossValidator.run(..., test_wells=...)`), фолды общие.
+Контроль на случайных датах показал, что около 80 из отброшенных мероприятий настоящие
+(подъём лежит до ~14 дней раньше даты технолога). Результаты эксперимента появятся после
+расчёта; пока они не получены, выигрыш от широкого окна не доказан.
+
 `audit` пишет `results/ml_freq/data_audit_halfyear/data_audit.xlsx` (решение по каждой
 строке разметки, статус каждой скважины; лист «сегменты» пуст — исправлять нечего),
 `data_audit.png`, `rejected_labels.csv` и `training_data.xlsx`.
@@ -92,6 +105,7 @@ python -m pytest gtm_detector/ml_freq/tests                  # тесты
 | Команда   | Что пишет                                                                    |
 |-----------|------------------------------------------------------------------------------|
 | `compare` | `results/ml_freq/<дата_время>/comparison.xlsx` (метрики + предсказания по каждой модели), `comparison.png` |
+| `compare-windows` | `results/ml_freq/<дата_время>/windows.xlsx`: листы «по зёрнам», «среднее», «разница» (широкое − узкое) |
 | `train`   | `gtm_detector/ml_freq/weights/<модель>.pt` или `.joblib` и обновлённый `weights/weights.zip` |
 | `pack-weights` | `weights/weights.zip` со всеми весами из `weights/`                      |
 | `predict` | `results/ml_freq/<дата_время>/events_<модель>.xlsx`                           |
@@ -284,14 +298,14 @@ Transformer получает эти каналы как последовател
 
 ```
 gtm_detector/ml_freq/
-├── __main__.py, cli.py     python -m gtm_detector.ml_freq {compare,train,predict,pack-weights,audit}
+├── __main__.py, cli.py     python -m gtm_detector.ml_freq {compare,compare-windows,train,predict,pack-weights,audit}
 ├── audit.py                отчёт о качестве данных 2020–2026 (можно запускать отдельно)
 ├── config.py               DataConfig, DecoderConfig, TransformerConfig, TrainingConfig, ExperimentConfig
 ├── data/
 │   ├── models.py           WellSeries (ряды скважины, target, training_mask), Interval
 │   ├── readers.py          тестовые файлы: MeasurementsReader, LabelsReader, WellRepository (+ кэш)
 │   ├── statistics.py       HalfYearStatisticsReader (полугодовые .xls), MergedStatisticsReader (склеенный .xlsx), MonitoringLabelsReader
-│   ├── repair.py           BlockShiftRepair (сегменты, сдвиг 0/180; только для склеенного файла), FrequencyCheck
+│   ├── repair.py           BlockShiftRepair (сегменты, сдвиг 0/180; только для склеенного файла), FrequencyCheck (окно lookback/lookahead)
 │   └── dataset.py          MergedWellRepository (+ кэш), DataAudit
 ├── features/builder.py     FeatureBuilder: sequence() для Transformer, tabular() для sklearn
 ├── models/
