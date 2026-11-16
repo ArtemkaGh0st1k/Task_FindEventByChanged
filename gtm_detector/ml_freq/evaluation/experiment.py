@@ -63,13 +63,29 @@ class CrossValidator:
         фолдах и тех же проверочных мероприятиях. Скважины без проверочной разметки
         в оценку не входят.
         """
-        if test_wells is not None and len(test_wells) != len(wells):
-            raise ValueError("test_wells должны соответствовать wells один к одному")
+        tests = {"": wells if test_wells is None else test_wells}
+        return self.run_multi(wells, models, tests)[""]
+
+    def run_multi(
+        self,
+        wells: Sequence[WellSeries],
+        models: Mapping[str, Callable[[], EventSegmenter]],
+        tests: Mapping[str, Sequence[WellSeries]],
+    ) -> dict[str, list[ModelResult]]:
+        """Одно обучение на ``wells``, проверка сразу на нескольких наборах разметки.
+
+        ``tests`` — имя набора -> те же скважины в том же порядке с другой разметкой
+        (например, с началом по дате технолога и по дню скачка частоты). Вероятности
+        считаются один раз, поэтому наборы сравнимы между собой день в день.
+        """
+        for label, test_wells in tests.items():
+            if len(test_wells) != len(wells):
+                raise ValueError(f"Набор «{label}» должен соответствовать wells один к одному")
         folds = self.folds(wells)
-        return [
-            self._evaluate(name, factory, wells, folds, test_wells or wells)
-            for name, factory in models.items()
+        evaluated = [
+            self._evaluate(name, factory, wells, folds, tests) for name, factory in models.items()
         ]
+        return {label: [one[label] for one in evaluated] for label in tests}
 
     def _evaluate(
         self,
@@ -77,36 +93,41 @@ class CrossValidator:
         factory: Callable[[], EventSegmenter],
         wells: Sequence[WellSeries],
         folds: list[list[int]],
-        test_wells: Sequence[WellSeries],
-    ) -> ModelResult:
-        result: ModelResult | None = None
-        targets, probas = [], []
+        tests: Mapping[str, Sequence[WellSeries]],
+    ) -> dict[str, ModelResult]:
+        results: dict[str, ModelResult] = {}
+        targets = {label: [] for label in tests}
+        probas = {label: [] for label in tests}
         for k, test_idx in enumerate(folds):
             test_set = set(test_idx)
             train = [well for i, well in enumerate(wells) if i not in test_set]
             model = factory()
-            if result is None:
-                result = ModelResult(name=name, title=model.title)
+            if not results:
+                results = {label: ModelResult(name=name, title=model.title) for label in tests}
             started = time.perf_counter()
             model.fit(train)
-            result.train_seconds += time.perf_counter() - started
+            elapsed = time.perf_counter() - started
+            for result in results.values():
+                result.train_seconds += elapsed
 
             for i in test_idx:
-                well = test_wells[i]
-                if not well.labels:
+                active = {label: test[i] for label, test in tests.items() if test[i].labels}
+                if not active:
                     continue
-                proba = model.predict_proba(well)
-                targets.append(well.target())
-                probas.append(proba)
-                predicted = self.decoder.decode(proba, well.dates)
-                result.score += self.matcher.score(predicted, well.labels)
-                result.predictions.extend(self._rows(well, predicted))
+                proba = model.predict_proba(wells[i])
+                predicted = self.decoder.decode(proba, wells[i].dates)
+                for label, well in active.items():
+                    targets[label].append(well.target())
+                    probas[label].append(proba)
+                    results[label].score += self.matcher.score(predicted, well.labels)
+                    results[label].predictions.extend(self._rows(well, predicted))
             logger.info("%s: фолд %d/%d готов", name, k + 1, len(folds))
 
-        y, p = np.concatenate(targets), np.concatenate(probas)
-        result.day_auc = float(roc_auc_score(y, p)) if 0 < y.sum() < len(y) else float("nan")
-        logger.info("%s: recall=%.3f F1=%.3f", name, result.score.recall, result.score.f1)
-        return result
+        for label, result in results.items():
+            y, p = np.concatenate(targets[label]), np.concatenate(probas[label])
+            result.day_auc = float(roc_auc_score(y, p)) if 0 < y.sum() < len(y) else float("nan")
+            logger.info("%s: recall=%.3f F1=%.3f", name, result.score.recall, result.score.f1)
+        return results
 
     def _rows(self, well: WellSeries, predicted: Sequence) -> list[dict]:
         rows = []

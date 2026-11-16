@@ -45,6 +45,15 @@
 .venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_repair.py::test_frequency_check_asymmetric_window -q
 ```
 
+## test_locate_returns_step_day  [3c781320]
+**Что проверяет.** `FrequencyCheck.locate` на ряде 48 Гц × 20 дней, затем 50 Гц × 20 дней (скачок в день 20): при дате технолога в днях 20 и 22 возвращается 20; широкое окно (14, 3) при дате 30 тоже даёт 20, а узкое — `None`; при запланированном приросте 48 → 56 (факт 2 Гц меньше половины) — `None`.
+
+**Какую ошибку поймал бы.** Возврат даты технолога вместо дня скачка, неверную сторону окна, ложное подтверждение маленького прироста.
+
+```bash
+.venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_repair.py::test_locate_returns_step_day -q
+```
+
 ## test_check_window_changes_cache_key  [f1fe4a0e]
 **Что проверяет.** Что окно поиска скачка входит в `repr(BlockShiftRepair)`, то есть в ключ кэша данных: `BlockShiftRepair(check=FrequencyCheck())` даёт ту же строку, что `BlockShiftRepair()`, а `FrequencyCheck(14, 3)` — другую.
 

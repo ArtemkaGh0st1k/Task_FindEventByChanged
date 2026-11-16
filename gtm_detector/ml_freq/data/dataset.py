@@ -60,7 +60,7 @@ class MergedWellRepository:
     ``statistics`` — папка с полугодовыми файлами или один склеенный файл.
     """
 
-    VERSION = 2  # менять при изменении логики — сбрасывает кэш
+    VERSION = 3  # менять при изменении логики — сбрасывает кэш (3: день скачка в Interval.jump)
     MIN_TELEMETRY_SHARE = 0.1  # доля дней с замерами, где частота > 10 Гц
     DATA_WINDOW = 14  # дней вокруг даты начала, где должны быть замеры
 
@@ -237,14 +237,26 @@ class MergedWellRepository:
         rows: Sequence[int | None],
         decisions: Sequence[str],
     ) -> tuple[list[WellSeries], list[dict]]:
+        dates = repaired["frequency"].columns
+        frequency = repaired["frequency"].to_numpy()
         labels: dict[int, list[Interval]] = {}
         for record, row, decision in zip(records, rows, decisions, strict=True):
             if decision == ACCEPTED:
+                jump = self.check.locate(
+                    frequency[row],
+                    dates.get_loc(pd.Timestamp(record.start)),
+                    record.current,
+                    record.new,
+                )
                 labels.setdefault(row, []).append(
-                    Interval(record.start, record.end, censored=record.censored)
+                    Interval(
+                        record.start,
+                        record.end,
+                        censored=record.censored,
+                        jump=None if jump is None else dates[jump].date(),
+                    )
                 )
 
-        dates = repaired["frequency"].columns
         wells, table = [], []
         for row, (number, cluster) in enumerate(index):
             days = np.flatnonzero(has_data[row])

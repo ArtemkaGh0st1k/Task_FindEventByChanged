@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 import numpy as np
@@ -28,6 +28,9 @@ class Interval:
     # Мониторинг остановлен, а эффект продолжался («ПРОДОЛЖАЕТСЯ ЭФФЕКТ»):
     # ``end`` — не конец эффекта, а последний день наблюдения.
     censored: bool = False
+    # День скачка частоты по замерам (``None`` — не определён). Он бывает раньше даты
+    # технолога: см. WellSeries.with_jump_starts.
+    jump: date | None = None
 
     def covers(self, day: date, last_day: date) -> bool:
         return self.start <= day <= (self.end or last_day)
@@ -52,6 +55,20 @@ class WellSeries:
 
     def __len__(self) -> int:
         return len(self.frame)
+
+    def with_jump_starts(self) -> WellSeries:
+        """Копия, где началом мероприятия служит день скачка частоты, а не дата технолога.
+
+        Окончание не меняется; начало не может оказаться позже окончания.
+        """
+        labels = []
+        for label in self.labels:
+            start = label.jump or label.start
+            if label.end is not None:
+                start = min(start, label.end)
+            labels.append(replace(label, start=start))
+        labels.sort(key=lambda label: label.start)
+        return replace(self, labels=labels)
 
     def target(self) -> np.ndarray:
         """1 — день внутри размеченного периода эффекта, 0 — вне."""

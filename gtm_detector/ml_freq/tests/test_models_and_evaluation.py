@@ -1,10 +1,16 @@
 from dataclasses import replace
+from datetime import timedelta
 
 import numpy as np
 import pytest
 import torch
 
-from gtm_detector.ml_freq.config import DecoderConfig, ExperimentConfig, TrainingConfig, TransformerConfig
+from gtm_detector.ml_freq.config import (
+    DecoderConfig,
+    ExperimentConfig,
+    TrainingConfig,
+    TransformerConfig,
+)
 from gtm_detector.ml_freq.data import Interval
 from gtm_detector.ml_freq.evaluation import CrossValidator, EventMatcher, SegmentDecoder
 from gtm_detector.ml_freq.models import (
@@ -73,6 +79,23 @@ def test_cross_validation_scores_only_test_wells_with_labels(wells):
     assert score.true_positives + score.false_negatives == len(wells) // 2
     with pytest.raises(ValueError):
         CrossValidator(ExperimentConfig(folds=2)).run(wells, {}, test_wells=test_wells[:-1])
+
+
+def test_run_multi_scores_each_test_set_from_one_training(wells):
+    for well in wells:  # у синтетических скважин скачка в разметке нет: ставим его на 2 дня раньше
+        earlier = timedelta(days=2)
+        well.labels = [replace(label, jump=label.start - earlier) for label in well.labels]
+    shifted = [well.with_jump_starts() for well in wells]
+    tests = {"дата": wells, "скачок": shifted}
+    results = CrossValidator(ExperimentConfig(folds=2)).run_multi(
+        wells, {"logreg": classic_models()["logreg"]}, tests
+    )
+    assert set(results) == {"дата", "скачок"}
+    for label, rows in results.items():
+        score = rows[0].score
+        assert score.true_positives + score.false_negatives == len(wells), label
+    with pytest.raises(ValueError):
+        CrossValidator(ExperimentConfig(folds=2)).run_multi(wells, {}, {"x": wells[:-1]})
 
 
 def test_cross_validation_runs_for_all_models(wells):

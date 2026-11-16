@@ -36,6 +36,16 @@ def test_frequency_check_asymmetric_window():
         FrequencyCheck(lookback=-1)
 
 
+def test_locate_returns_step_day():
+    series = np.r_[np.full(20, 48.0), np.full(20, 50.0)]  # скачок в день 20
+    assert FrequencyCheck().locate(series, 20, 48.0, 50.0) == 20
+    assert FrequencyCheck().locate(series, 22, 48.0, 50.0) == 20  # дата технолога позже скачка
+    wide = FrequencyCheck(lookback=14, lookahead=3)
+    assert wide.locate(series, 30, 48.0, 50.0) == 20  # дата технолога на 10 дней позже
+    assert FrequencyCheck().locate(series, 30, 48.0, 50.0) is None
+    assert wide.locate(series, 20, 48.0, 56.0) is None  # прирост меньше половины запланированного
+
+
 def test_check_window_changes_cache_key():
     narrow = repr(BlockShiftRepair())
     assert repr(BlockShiftRepair(check=FrequencyCheck())) == narrow

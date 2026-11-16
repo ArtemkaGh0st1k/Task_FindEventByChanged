@@ -1,9 +1,11 @@
-## @module  [3dfc8021]
+## @module  [6c4c4a83]
 Тесты слоя данных и признаков: разметка скважины (`WellSeries.target`, `training_mask`), `FeatureBuilder` и разбор «грязных» значений из Excel (`normalize_id`, `parse_date`). Все данные синтетические — скважины из `make_well` (см. `conftest.py`). Запуск файла целиком:
 
 ```bash
 .venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_data_and_features.py -q
 ```
+
+Добавлен тест `with_jump_starts`.
 
 ## test_target_and_training_mask  [91a56e79]
 **Что проверяет.** Как размеченный интервал превращается в целевой вектор по дням и в маску дней, на которых разрешено учиться.
@@ -20,6 +22,15 @@
 
 ```bash
 .venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_data_and_features.py::test_target_and_training_mask -q
+```
+
+## test_with_jump_starts_moves_only_start  [6928c023]
+**Что проверяет.** Три метки: скачок раньше даты технолога (начало сдвигается на день скачка), скачок позже окончания (начало не позже конца: берётся день окончания) и метка без скачка (без изменений). `end` везде прежний, исходная скважина не меняется, а `target()` сдвинутой скважины в день 35 равен 1 (у исходной — 0).
+
+**Какую ошибку поймал бы.** Изменение `end`, мутацию исходных меток, начало позже окончания, потерю сортировки.
+
+```bash
+.venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_data_and_features.py::test_with_jump_starts_moves_only_start -q
 ```
 
 ## test_features_shapes_and_values  [a175b789]

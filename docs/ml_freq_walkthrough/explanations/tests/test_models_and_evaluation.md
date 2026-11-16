@@ -1,4 +1,4 @@
-## @module  [3bdb20a7]
+## @module  [04838ccf]
 Тесты второй половины цепочки: «вероятности по дням → интервалы → сравнение с разметкой» и сами модели. Проверяются `SegmentDecoder`, `EventMatcher`, Transformer, scikit-learn-модель и `CrossValidator`. Обучение идёт на восьми синтетических скважинах `wells` (см. `conftest.py`); Transformer берётся уменьшенный (`SMALL`: `d_model=16`, 2 головы, 1 слой, `dim_feedforward=32`) и учится 3 эпохи по окнам в 64 дня (`QUICK`) — так тест укладывается в секунды, но проверяет все шаги: обучение, предсказание, сохранение, загрузку.
 
 Тесты проверяют **механику**, а не качество: настоящие цифры даёт команда `compare`. Запуск файла целиком:
@@ -6,6 +6,8 @@
 ```bash
 .venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_models_and_evaluation.py -q
 ```
+
+Добавлен тест `run_multi`.
 
 ## test_decoder_merges_gaps_and_marks_open_end  [3bdcdbf5]
 **Что проверяет.** Правила `SegmentDecoder`: склейку коротких разрывов и признак «эффект продолжается».
@@ -79,6 +81,15 @@
 
 ```bash
 .venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_models_and_evaluation.py::test_cross_validation_scores_only_test_wells_with_labels -q
+```
+
+## test_run_multi_scores_each_test_set_from_one_training  [db867ce5]
+**Что проверяет.** На синтетических скважинах скачок ставится на 2 дня раньше начала; наборы «дата» и «скачок» (`with_jump_starts`) проверяются одним вызовом `run_multi` с `logreg` и 2 фолдами. Ответ содержит оба набора, и в каждом найдено + пропущено = числу скважин. Набор неверной длины — `ValueError`.
+
+**Какую ошибку поймал бы.** Потерю набора в ответе, смешение счётчиков наборов, пропуск проверки длины.
+
+```bash
+.venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_models_and_evaluation.py::test_run_multi_scores_each_test_set_from_one_training -q
 ```
 
 ## test_cross_validation_runs_for_all_models  [72650192]

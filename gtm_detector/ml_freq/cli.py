@@ -100,10 +100,30 @@ WINDOW_METRICS = (
     "ROC-AUC по дням",
 )
 NARROW, WIDE = "узкое окно", "широкое окно"
+TECH, JUMP = "начало по дате технолога", "начало по дню скачка"
+START_CHOICES = {"tech": (TECH,), "jump": (JUMP,), "both": (TECH, JUMP)}
 
 
 def _event_count(wells: Sequence) -> int:
     return sum(len(well.labels) for well in wells)
+
+
+def _window_tables(
+    frame: pd.DataFrame, test: str, baseline: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Среднее метрик по зёрнам и разница с базовым вариантом (среднее ± std по зёрнам)."""
+    metrics = list(WINDOW_METRICS)
+    sub = frame[frame["проверка"] == test]
+    mean = sub.groupby(["модель", "вариант"])[metrics].mean()
+    by_seed = sub.set_index(["модель", "зерно", "вариант"])[metrics].unstack("вариант")
+    base = by_seed.xs(baseline, axis=1, level=1)
+    variants = [v for v in sub["вариант"].unique() if v != baseline]
+    deltas = {v: by_seed.xs(v, axis=1, level=1) - base for v in variants}
+    grouped = pd.concat(deltas, names=["вариант"]).groupby(level=["вариант", "модель"])
+    stats = grouped.agg(["mean", "std"])
+    means = stats.xs("mean", axis=1, level=1).apply(lambda col: col.map("{:+.3f}".format))
+    spread = stats.xs("std", axis=1, level=1).apply(lambda col: col.map("{:.3f}".format))
+    return mean, means + " ± " + spread
 
 
 def run_compare_windows(args: argparse.Namespace) -> int:
@@ -133,6 +153,18 @@ def run_compare_windows(args: argparse.Namespace) -> int:
         f"проверка — на {_event_count(narrow)}"
     )
 
+    # Проверка: те же мероприятия узкого окна, начало по дате технолога и по дню скачка.
+    tests = {TECH: narrow, JUMP: [well.with_jump_starts() for well in narrow]}
+    starts = START_CHOICES[args.label_start]
+    variants = [
+        (f"{window} / {start}", wells if start == TECH else [w.with_jump_starts() for w in wells])
+        for window, wells in ((NARROW, narrow), (WIDE, wide))
+        for start in starts
+    ]
+    baseline = f"{NARROW} / {TECH}"
+    if baseline not in dict(variants):
+        variants.insert(0, (baseline, narrow))  # без базы разницу считать не с чем
+
     rows = []
     for seed in args.seeds or [args.seed]:
         args.seed = seed
@@ -143,29 +175,28 @@ def run_compare_windows(args: argparse.Namespace) -> int:
             return 1
         models = {name: registry[name] for name in args.models}
         validator = CrossValidator(ExperimentConfig(folds=args.folds, seed=seed))
-        for variant, train in ((NARROW, narrow), (WIDE, wide)):
-            for result in validator.run(train, models, test_wells=narrow):
-                row = {"модель": result.title, "зерно": seed, "обучение": variant}
-                row |= result.score.as_dict() | {"ROC-AUC по дням": result.day_auc}
-                rows.append(row)
+        for variant, train in variants:
+            for test, results in validator.run_multi(train, models, tests).items():
+                for result in results:
+                    row = {"модель": result.title, "зерно": seed}
+                    row |= {"вариант": variant, "проверка": test}
+                    row |= result.score.as_dict() | {"ROC-AUC по дням": result.day_auc}
+                    rows.append(row)
             print(f"зерно {seed}: {variant} — готово")
 
     frame = pd.DataFrame(rows)
-    mean = frame.groupby(["модель", "обучение"])[list(WINDOW_METRICS)].mean()
-    indexed = frame.set_index(["модель", "зерно", "обучение"])[list(WINDOW_METRICS)]
-    by_seed = indexed.unstack("обучение")
-    delta = by_seed.xs(WIDE, axis=1, level=1) - by_seed.xs(NARROW, axis=1, level=1)
-    delta_stats = delta.groupby(level=0).agg(["mean", "std"])
     out_dir = args.out_dir or _run_dir(data.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    tables = {test: _window_tables(frame, test, baseline) for test in tests}
     with pd.ExcelWriter(out_dir / "windows.xlsx") as writer:
         frame.to_excel(writer, sheet_name="по зёрнам", index=False)
-        mean.to_excel(writer, sheet_name="среднее")
-        delta_stats.to_excel(writer, sheet_name="разница")
+        for n, (mean, delta) in enumerate(tables.values(), start=1):
+            mean.to_excel(writer, sheet_name=f"среднее, проверка {n}")
+            delta.to_excel(writer, sheet_name=f"разница, проверка {n}")
     with pd.option_context("display.width", 250, "display.max_columns", None):
-        print("\nСреднее по зёрнам:\n" + mean.round(3).to_string())
-        title = "\nРазница «широкое − узкое» (среднее и std по зёрнам):\n"
-        print(title + delta_stats.round(3).to_string())
+        for test, (mean, delta) in tables.items():
+            print(f"\n=== Проверка: {test} ===\nСреднее по зёрнам:\n{mean.round(3).to_string()}")
+            print(f"\nРазница с «{baseline}» (среднее ± std по зёрнам):\n{delta.to_string()}")
     print(f"\nОтчёт: {out_dir / 'windows.xlsx'}")
     return 0
 
@@ -281,6 +312,12 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     )
     windows.add_argument(
         "--models", nargs="+", default=names, help=f"какие модели: {' '.join(names)}"
+    )
+    windows.add_argument(
+        "--label-start",
+        choices=sorted(START_CHOICES),
+        default="both",
+        help="начало обучающей метки: tech — дата технолога, jump — день скачка, both — оба",
     )
     windows.add_argument("--folds", type=int, default=5, help="фолдов по скважинам")
     windows.add_argument(

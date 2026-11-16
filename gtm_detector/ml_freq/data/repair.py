@@ -61,22 +61,53 @@ class FrequencyCheck:
 
     def confirms(self, frequency: np.ndarray, i: int, current: float, new: float) -> bool | None:
         """``True``/``False`` — подтверждён/нет; ``None`` — около дня ``i`` нет замеров."""
-        planned = new - current if np.isfinite(new - current) else np.inf
-        tolerance = max(self.LEVEL_TOLERANCE, 0.03 * new)
         tested = False
         for t in range(i - self.lookback, i + self.lookahead + 1):
-            before = self._working(frequency[max(t - self.WINDOW, 0) : max(t, 0)])
-            after = self._working(frequency[max(t, 0) : max(t + self.WINDOW, 0)])
-            if len(before) < self.MIN_VALUES or len(after) < self.MIN_VALUES:
+            verdict = self._split_confirms(frequency, t, current, new)
+            if verdict is None:
                 continue
             tested = True
-            level = np.median(after)
-            rise = level - np.median(before)
-            if rise >= self.MIN_RISE and (
-                abs(level - new) <= tolerance or rise >= self.MIN_PLANNED_SHARE * planned
-            ):
+            if verdict:
                 return True
         return False if tested else None
+
+    def locate(self, frequency: np.ndarray, i: int, current: float, new: float) -> int | None:
+        """День скачка, подтверждающего подъём около дня ``i``; ``None`` — не подтверждён.
+
+        Подтверждающие дни образуют полосу вокруг настоящей ступени: медианы недели до и
+        после дают полный прирост и на несколько дней в обе стороны от неё. Внутри полосы
+        берётся день с самым большим суточным приростом частоты.
+        """
+        days = [
+            t
+            for t in range(i - self.lookback, i + self.lookahead + 1)
+            if self._split_confirms(frequency, t, current, new)
+        ]
+        if not days:
+            return None
+        steps = {
+            d: frequency[d] - frequency[d - 1]
+            for d in range(max(min(days), 1), min(max(days), len(frequency) - 1) + 1)
+            if frequency[d] > self.MIN_WORKING and frequency[d - 1] > self.MIN_WORKING
+        }
+        return max(steps, key=steps.get) if steps else (min(days) + max(days)) // 2
+
+    def _split_confirms(
+        self, frequency: np.ndarray, t: int, current: float, new: float
+    ) -> bool | None:
+        """Подтверждает ли скачок на границе дня ``t``; ``None`` — рабочих замеров мало."""
+        before = self._working(frequency[max(t - self.WINDOW, 0) : max(t, 0)])
+        after = self._working(frequency[max(t, 0) : max(t + self.WINDOW, 0)])
+        if len(before) < self.MIN_VALUES or len(after) < self.MIN_VALUES:
+            return None
+        planned = new - current if np.isfinite(new - current) else np.inf
+        level = np.median(after)
+        rise = level - np.median(before)
+        tolerance = max(self.LEVEL_TOLERANCE, 0.03 * new)
+        return bool(
+            rise >= self.MIN_RISE
+            and (abs(level - new) <= tolerance or rise >= self.MIN_PLANNED_SHARE * planned)
+        )
 
     def _working(self, values: np.ndarray) -> np.ndarray:
         return values[values > self.MIN_WORKING]
