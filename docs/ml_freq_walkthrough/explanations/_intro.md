@@ -28,7 +28,7 @@ Excel
   список WellSeries: таблица frame (дни x ряды) + labels (интервалы)
         |
         v   FeatureBuilder                                    (features/builder.py)
-  15 каналов (Transformer) или 106 признаков (scikit-learn) на каждый день
+  20 каналов (Transformer) или 131 признак (scikit-learn) на каждый день
         |
         v   модели: transformer, logreg, random_forest, extra_trees, gboost   (models/)
   вероятность «день в эффекте» для каждого дня

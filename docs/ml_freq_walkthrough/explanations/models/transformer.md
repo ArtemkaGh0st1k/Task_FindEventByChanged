@@ -2,7 +2,7 @@
 Собственная модель проекта: Transformer-энкодер для суточных рядов скважины на PyTorch. Схема:
 
 ```
-15 каналов дня ─► Conv1d (ступеньки за несколько дней) ─► + позиционное кодирование
+20 каналов дня ─► Conv1d (ступеньки за несколько дней) ─► + позиционное кодирование
               ─► 2 × TransformerEncoderLayer (внимание по всему ряду)
               ─► LayerNorm + Linear ─► логит «день внутри эффекта»
 ```
@@ -42,7 +42,7 @@ pe(x).shape            # torch.Size([2, 100, 32])
 ## TimeSeriesTransformer  [18f917af]
 Сама нейросеть: `(batch, дни, каналы) → (batch, дни)` логитов. Состав:
 
-1. `embed` — `Conv1d(15 → 32, kernel=5, padding=2)`: превращает 15 каналов дня в 32 скрытых признака, учитывая ±2 соседних дня; `padding=2` сохраняет длину ряда;
+1. `embed` — `Conv1d(20 → 32, kernel=5, padding=2)`: превращает 20 каналов дня в 32 скрытых признака, учитывая ±2 соседних дня; `padding=2` сохраняет длину ряда;
 2. `position` — `PositionalEncoding`;
 3. `encoder` — 2 слоя `TransformerEncoderLayer` с 4 головами, `norm_first=True` (нормализация до внимания — стабильнее на маленьких данных), `dropout=0,2`;
 4. `head` — `LayerNorm` + `Linear(32 → 1)`: по одному числу на день.
@@ -58,7 +58,7 @@ net(torch.zeros(2, 100, 15)).shape           # torch.Size([2, 100])
 Это проверяет `test_transformer_forward_shape`.
 
 ## TimeSeriesTransformer.__init__  [54ae65c9]
-Собирает слои. Параметры: `n_channels` — число входных каналов (`FeatureBuilder.sequence_size` = 15), `config` — `TransformerConfig` (`d_model`, `n_heads`, `n_layers`, `dim_feedforward`, `dropout`, `conv_kernel`, `max_length`). Число каналов передаётся отдельно, чтобы размер входа нельзя было рассинхронизировать с признаками. `enable_nested_tensor=False` отключает оптимизацию PyTorch, которая плохо сочетается с маской паддинга.
+Собирает слои. Параметры: `n_channels` — число входных каналов (`FeatureBuilder.sequence_size` = 20), `config` — `TransformerConfig` (`d_model`, `n_heads`, `n_layers`, `dim_feedforward`, `dropout`, `conv_kernel`, `max_length`). Число каналов передаётся отдельно, чтобы размер входа нельзя было рассинхронизировать с признаками. `enable_nested_tensor=False` отключает оптимизацию PyTorch, которая плохо сочетается с маской паддинга.
 
 ### Пример
 ```python

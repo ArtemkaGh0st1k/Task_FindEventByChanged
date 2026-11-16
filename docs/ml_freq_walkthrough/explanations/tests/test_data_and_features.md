@@ -1,5 +1,5 @@
-## @module  [3dfc8021]
-Тесты слоя данных и признаков: разметка скважины (`WellSeries.target`, `training_mask`), `FeatureBuilder` и разбор «грязных» значений из Excel (`normalize_id`, `parse_date`). Все данные синтетические — скважины из `make_well` (см. `conftest.py`). Запуск файла целиком:
+## @module  [2ba1aa0e]
+Тесты слоя данных и признаков: разметка скважины (`WellSeries.target`, `training_mask`), `FeatureBuilder` (в том числе признаки возврата нефти к базе) и разбор «грязных» значений из Excel (`normalize_id`, `parse_date`). Все данные синтетические — скважины из `make_well` (см. `conftest.py`). Запуск файла целиком:
 
 ```bash
 .venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_data_and_features.py -q
@@ -22,6 +22,32 @@
 .venv/Scripts/python -m pytest gtm_detector/ml_freq/tests/test_data_and_features.py::test_target_and_training_mask -q
 ```
 
+## _channel  [2f8cea37]
+Вспомогательная функция: достаёт из матрицы `sequence()` один столбец по имени канала (`SEQUENCE_CHANNELS.index(name)`), чтобы тесты не зависели от номера столбца.
+
+### Пример
+```python
+_channel(builder, sequence, "oil_below_base")   # массив из 120 значений 0/1
+```
+
+## test_oil_end_features_follow_return_to_base  [95984206]
+Проверяет признаки возврата нефти к базе на `make_well(step=40, effect=30)`: нефть 10, в днях 42–71 — 11, затем снова 10. До скачка (дни 0–39) `oil_below_base` везде 0; в день 50 нефть выше базы (`oil_vs_base` ≈ 0,1); в день 72 она вернулась (`oil_below_base` = 1, `oil_days_below` = 1/14); `oil_drawdown` ≈ 0,1; в день 90 серия насыщается до 1. Поймал бы ошибку в базе, знаке сравнения или счёте серии.
+
+### Пример
+День 72: `below` = 1, `run` ≈ 0,071, `drawdown` ≈ 0,1.
+
+## test_oil_end_features_with_several_steps  [ecf6e803]
+Проверяет, что при нескольких скачках частоты у каждого отрезка своя база и массивы не смешиваются. Скважина `make_well(step=30, effect=20)` с добавленными скачками 50 → 52 Гц в день 70 и 52 → 54 Гц в день 100. Утверждения: `sequence()` и `tabular()` дают по строке на день и не содержат NaN; `days_since_step` в день 70 равен 0 (отсчёт от нового скачка); в день 75 `oil_below_base` = 1 (нефть на базе у второго скачка). Поймал бы выход за границы отрезка или NaN при пересчёте базы.
+
+### Пример
+Скачки в днях 30, 70, 100 дают три отрезка; в день 75 используется база по дням 67–70 (нефть 10), а не по дню 30.
+
+## test_oil_missing_is_not_read_as_return_to_base  [77979139]
+Проверяет, что пропуск замера нефти не выглядит как «вернулась к базе». В днях 60–62 нефть заменена на NaN: `oil_missing` = 1 ровно в трёх днях, а `oil_below_base` и `oil_vs_base` в них нулевые. Затем нефть обнулена целиком: NaN в матрице нет, `oil_below_base` везде 0, `oil_missing` везде 1 (базы нет, ошибок нет).
+
+### Пример
+`make_well(step=40, effect=30)` с `debit_oil[60:63] = NaN` даёт `oil_missing.sum() == 3`.
+
 ## test_features_shapes_and_values  [a175b789]
 **Что проверяет.** Форму и разумность признаков `FeatureBuilder` и то, что в них видно событие.
 
@@ -29,7 +55,7 @@
 
 **Проверки:**
 
-- `sequence` имеет форму `(120, 15)` (15 каналов `SEQUENCE_CHANNELS`), `tabular` — `(120, 106)` (по числу `tabular_names`);
+- `sequence` имеет форму `(120, 20)` (20 каналов `SEQUENCE_CHANNELS`), `tabular` — `(120, 131)` (по числу `tabular_names`);
 - в табличных признаках нет `NaN`, а модуль значений не больше 3 (константа `CLIP`);
 - канал `f_diff` в день 40 положителен (в тесте 0,4: скачок на 2 Гц при опорной частоте около 50 Гц, умноженный на 10);
 - канал `liq_vs_step` в день 45 больше 0,05 (в тесте 0,094): дебит жидкости выше уровня до скачка примерно на 10 %.

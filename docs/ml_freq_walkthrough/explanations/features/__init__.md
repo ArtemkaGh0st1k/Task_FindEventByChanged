@@ -7,6 +7,6 @@
 from gtm_detector.ml_freq.features import FeatureBuilder
 
 fb = FeatureBuilder()
-fb.sequence_size        # 15 каналов для Transformer
-len(fb.tabular_names)   # 106 признаков для scikit-learn
+fb.sequence_size        # 20 каналов для Transformer
+len(fb.tabular_names)   # 131 признак для scikit-learn
 ```

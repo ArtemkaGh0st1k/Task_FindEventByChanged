@@ -23,6 +23,11 @@ class FeatureBuilder:
     MIN_WORKING_FREQ = 10.0  # Гц: ниже насос считается остановленным
     MIN_STEP = 0.1  # Гц: подъём частоты, после которого считаются признаки «от скачка»
     WINDOW = 30  # дней: «недавний» уровень параметров
+    # Окончание эффекта: технолог ставит его, когда дебит нефти вернулся к уровню до подъёма.
+    # База — медиана за BASE_DAYS дней до скачка и сам день скачка: дебит одного дня
+    # шумный, и «первый день не выше» срабатывает почти сразу (проверено на разметке).
+    BASE_DAYS = 3
+    BELOW_RUN_CAP = 14  # дней подряд ниже базы, при которых признак «насыщается»
 
     SEQUENCE_CHANNELS = (
         "working",
@@ -40,6 +45,11 @@ class FeatureBuilder:
         "oil_vs_step",
         "wc_vs_step",
         "liq_missing",
+        "oil_vs_base",
+        "oil_below_base",
+        "oil_days_below",
+        "oil_drawdown",
+        "oil_missing",
     )
     SHIFTED_CHANNELS = (
         "working",
@@ -51,6 +61,8 @@ class FeatureBuilder:
         "liq_vs_step",
         "oil_vs_step",
         "wc_vs_step",
+        "oil_vs_base",
+        "oil_below_base",
     )
     OFFSETS = (-14, -7, -3, -1, 1, 3, 7, 14)
 
@@ -109,6 +121,7 @@ class FeatureBuilder:
         out["pzab_vs_30d"] = self._relative_to_past(frame["pressure_zab"], working)
         out = out.join(self._since_last_step(frame, frequency, working))
         out["liq_missing"] = frame["debit_liquid"].isna().astype(float)
+        out["oil_missing"] = frame["debit_oil"].isna().astype(float)  # иначе пропуск = «как база»
         return out.fillna(0.0).clip(-CLIP, CLIP)
 
     def _relative_to_past(self, series: pd.Series, working: pd.Series) -> pd.Series:
@@ -128,7 +141,17 @@ class FeatureBuilder:
         n = len(frame)
         result = {
             name: np.zeros(n)
-            for name in ("days_since_step", "step_size", "liq_vs_step", "oil_vs_step", "wc_vs_step")
+            for name in (
+                "days_since_step",
+                "step_size",
+                "liq_vs_step",
+                "oil_vs_step",
+                "wc_vs_step",
+                "oil_vs_base",
+                "oil_below_base",
+                "oil_days_below",
+                "oil_drawdown",
+            )
         }
         result["days_since_step"][:] = 1.0  # «давно не было скачка»
         liquid, oil = frame["debit_liquid"].to_numpy(), frame["debit_oil"].to_numpy()
@@ -143,7 +166,39 @@ class FeatureBuilder:
             result["liq_vs_step"][span] = _ratio(liquid[span], liquid[before])
             result["oil_vs_step"][span] = _ratio(oil[span], oil[before])
             result["wc_vs_step"][span] = (watercut[span] - watercut[before]) / 10
+            base = self._oil_base(oil, step)
+            if base is not None:
+                for name, feature in self._oil_end_features(oil[span], base).items():
+                    result[name][span] = feature
         return pd.DataFrame(result, index=frame.index)
+
+    def _oil_base(self, oil: np.ndarray, step: int) -> float | None:
+        """Уровень нефти до подъёма: медиана последних дней перед скачком; ``None`` — нет базы."""
+        window = oil[max(step - self.BASE_DAYS, 0) : step + 1]
+        window = window[np.isfinite(window)]
+        base = float(np.median(window)) if len(window) else 0.0
+        return base if base > 0 else None
+
+    def _oil_end_features(self, oil: np.ndarray, base: float) -> dict[str, np.ndarray]:
+        """Нефть после скачка относительно базы: вернулась ли она к уровню до подъёма.
+
+        День без замера не даёт сведений: отношение 0, он не считается «ниже базы» и
+        обрывает серию дней подряд.
+        """
+        valid = np.isfinite(oil)
+        below = valid & (oil <= base)
+        run, count = np.zeros(len(oil)), 0
+        for i, flag in enumerate(below):
+            count = count + 1 if flag else 0
+            run[i] = min(count, self.BELOW_RUN_CAP) / self.BELOW_RUN_CAP
+        peak = np.maximum.accumulate(np.where(valid, oil, -np.inf))
+        has_peak = valid & np.isfinite(peak)
+        return {
+            "oil_vs_base": np.where(valid, oil / base - 1, 0.0),
+            "oil_below_base": below.astype(float),
+            "oil_days_below": run,
+            "oil_drawdown": np.where(has_peak, (peak - oil) / base, 0.0),
+        }
 
 
 def _ratio(values: np.ndarray, base: float) -> np.ndarray:
